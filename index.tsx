@@ -570,7 +570,8 @@ const App = () => {
       };
     }, []);
 
-    const router = useMemo(() => {
+    // FIX: Renamed `router` to `pageContent` to avoid potential naming collisions.
+    const pageContent = useMemo(() => {
         const pathParts = path.split('/').filter(Boolean);
         if (pathParts[0] === 'book' && pathParts[1]) {
             return <PaginaDeAgendamento adminId={pathParts[1]} />;
@@ -578,10 +579,19 @@ const App = () => {
         if (user && profile) {
             return <Dashboard user={user} profile={profile} setProfile={setProfile} />;
         }
+        if (user && !profile) {
+             // This state occurs briefly after login while the profile is being created/fetched.
+             // Instead of rendering nothing, we show a loader.
+             return (
+                 <div className="min-h-screen bg-black flex justify-center items-center">
+                     <LoaderIcon className="w-16 h-16 text-white" />
+                 </div>
+             );
+        }
         if(!user && !isLoading) {
              return <LoginPage />;
         }
-        return null; // Return null or a loader while loading
+        return null; 
     }, [path, user, profile, isLoading]);
 
     if (isLoading) {
@@ -592,7 +602,7 @@ const App = () => {
         );
     }
     
-    return router;
+    return pageContent;
 };
 
 const container = document.getElementById('root');
