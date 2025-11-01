@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, Session } from '@supabase/supabase-js';
-import QRCode from 'react-qr-code';
 
 // --- CONFIGURAÇÃO DO CLIENTE SUPABASE ---
 const supabaseUrl = 'https://ehosmvbealefukkbqggp.supabase.co';
@@ -207,10 +206,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }) => {
                     <h2 className="text-xl font-bold text-white">Seu Link de Agendamento</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white"><XIcon className="w-6 h-6"/></button>
                 </div>
-                <p className="text-sm text-gray-400 mb-4">Compartilhe este QR Code ou link para seus clientes agendarem um horário com você.</p>
-                <div className="bg-white p-4 rounded-lg inline-block mb-4">
-                    <QRCode value={bookingLink} size={128} />
-                </div>
+                <p className="text-sm text-gray-400 mb-6">Compartilhe este link para que seus clientes possam agendar um horário com você.</p>
                 <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-left mb-6">
                     <p className="text-white truncate">{bookingLink}</p>
                 </div>
