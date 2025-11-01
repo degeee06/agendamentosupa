@@ -133,25 +133,38 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
     );
 };
 
-const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
+const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<boolean>, user: User }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
         setIsSaving(true);
-        await onSave(name, email, date, time);
+        const success = await onSave(name, email, date, time);
         setIsSaving(false);
-        setName(''); setEmail(''); setDate(''); setTime('');
-        onClose();
+        if (success) {
+            setName(''); setEmail(''); setDate(''); setTime('');
+            onClose();
+        } else {
+            setError('Você atingiu o limite diário de agendamentos do seu plano.');
+        }
     };
+    
+    useEffect(() => {
+        if (!isOpen) {
+            setError('');
+        }
+    }, [isOpen]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Novo Agendamento">
             <form onSubmit={handleSubmit} className="space-y-4">
+                {error && <p className="text-red-400 bg-red-500/10 p-3 rounded-lg text-center">{error}</p>}
                 <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="email" placeholder="Email do Cliente" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
@@ -227,7 +240,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         e.preventDefault();
         setMessage(null);
 
-        if (adminProfile && adminProfile.daily_usage >= 5) {
+        // A verificação no frontend é boa para UX, mas a segurança real está no backend (Trigger do Supabase)
+        if (adminProfile && adminProfile.plan === 'trial' && adminProfile.daily_usage >= 5) {
             setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
             return;
         }
@@ -238,7 +252,12 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         });
 
         if (error) {
-            setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento. Tente novamente.' });
+            // Verifica se o erro é o nosso erro customizado do banco de dados
+            if (error.message.includes('Limite diário de agendamentos atingido')) {
+                 setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
+            } else {
+                setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento. Tente novamente.' });
+            }
             console.error(error);
         } else {
              // Increment usage for admin
@@ -279,7 +298,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                         <input type="email" placeholder="Seu Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                         <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                         <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                        <button type="submit" disabled={isSaving || (adminProfile?.daily_usage ?? 0) >= 5} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="submit" disabled={isSaving || (adminProfile?.plan === 'trial' && (adminProfile?.daily_usage ?? 0) >= 5)} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                         </button>
                     </form>
@@ -327,7 +346,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const TRIAL_LIMIT = 5;
     const usage = profile?.daily_usage ?? 0;
-    const hasReachedLimit = usage >= TRIAL_LIMIT;
+    const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
     const fetchAppointments = useCallback(async () => {
         const { data, error } = await supabase
@@ -361,8 +380,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             );
     }, [appointments, statusFilter, searchTerm]);
 
-    const handleSaveAppointment = async (name: string, email: string, date: string, time: string) => {
-        if (!profile) return;
+    const handleSaveAppointment = async (name: string, email: string, date: string, time: string): Promise<boolean> => {
+        if (!profile) return false;
         const { data, error } = await supabase
             .from('appointments')
             .insert({ name, email, date, time, user_id: user.id })
@@ -371,6 +390,10 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         if (error) {
             console.error('Erro ao salvar:', error);
+            if (error.message.includes('Limite diário de agendamentos atingido')) {
+                 // A segurança do backend bloqueou, o retorno é 'false'
+                 return false;
+            }
         } else if (data) {
             setAppointments(prev => [data, ...prev]);
             const today = new Date().toISOString().split('T')[0];
@@ -383,7 +406,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 .single();
             if (profileError) console.error("Erro ao atualizar perfil:", profileError);
             else setProfile(updatedProfile);
+            return true;
         }
+        return false;
     };
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
