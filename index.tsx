@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, Session } from '@supabase/supabase-js';
-import QRCode from 'qrcode.react';
+import QRCode from 'react-qr-code';
 
 // --- CONFIGURAÇÃO DO CLIENTE SUPABASE ---
 const supabaseUrl = 'https://ehosmvbealefukkbqggp.supabase.co';
