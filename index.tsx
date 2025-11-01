@@ -523,15 +523,15 @@ const App = () => {
           const currentUser = session?.user ?? null;
 
           if (currentUser) {
-              const { data: userProfile, error } = await supabase
+              const { data: userProfiles, error } = await supabase
                   .from('profiles')
                   .select('*')
-                  .eq('id', currentUser.id)
-                  .single();
+                  .eq('id', currentUser.id);
 
               if (error) {
                   console.error("Erro ao buscar perfil:", error);
-              } else if (userProfile) {
+              } else if (userProfiles && userProfiles.length > 0) {
+                  const userProfile = userProfiles[0];
                   const today = new Date().toISOString().split('T')[0];
                   if (userProfile.last_usage_date !== today) {
                       // Reset usage if it's a new day
