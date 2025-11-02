@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -24,6 +25,12 @@ type Profile = {
     daily_usage: number;
     last_usage_date: string;
 };
+
+type BusinessProfile = {
+    user_id: string;
+    blocked_dates: string[]; // ['2024-12-25', '2025-01-01']
+    blocked_times: { [key: string]: string[] }; // { 'monday': ['12:00', '12:30'], 'saturday': [] }
+}
 
 type User = {
     id: string;
@@ -61,6 +68,7 @@ const CopyIcon = (props: any) => <Icon {...props}><rect x="9" y="9" width="13" h
 const AlertCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></Icon>;
 const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></Icon>;
 const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
+const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
 
 // --- Componentes de UI ---
 const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
@@ -118,11 +126,15 @@ const AppointmentCard = ({ appointment, onUpdateStatus }: { appointment: Appoint
     );
 };
 
-const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }) => {
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, size?: 'md' | 'lg' }) => {
     if (!isOpen) return null;
+    const sizeClasses = {
+        md: 'max-w-md',
+        lg: 'max-w-lg'
+    };
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className="glassmorphism w-full max-w-md rounded-2xl p-6 border border-gray-700 relative" onClick={(e) => e.stopPropagation()}>
+            <div className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative`} onClick={(e) => e.stopPropagation()}>
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
                     <XIcon className="w-6 h-6" />
                 </button>
@@ -188,6 +200,137 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
     );
 };
 
+const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, onClose: () => void, userId: string }) => {
+    const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {} });
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [newBlockedDate, setNewBlockedDate] = useState('');
+    const [newBlockedTime, setNewBlockedTime] = useState('');
+    const [selectedDay, setSelectedDay] = useState('monday');
+
+    const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
+
+    useEffect(() => {
+        if (isOpen) {
+            const fetchProfile = async () => {
+                setIsLoading(true);
+                const { data, error } = await supabase.from('business_profiles').select('*').eq('user_id', userId).single();
+                if (data) setProfile(data);
+                else setProfile({ user_id: userId, blocked_dates: [], blocked_times: {} });
+                setIsLoading(false);
+            };
+            fetchProfile();
+        }
+    }, [isOpen, userId]);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const { error } = await supabase.from('business_profiles').upsert(profile, { onConflict: 'user_id' });
+        if (error) {
+            console.error("Erro ao salvar perfil de negócio:", error);
+        } else {
+            onClose();
+        }
+        setIsSaving(false);
+    };
+
+    const addBlockedDate = () => {
+        if (newBlockedDate && !profile.blocked_dates.includes(newBlockedDate)) {
+            setProfile(p => ({ ...p, blocked_dates: [...p.blocked_dates, newBlockedDate].sort() }));
+            setNewBlockedDate('');
+        }
+    };
+    
+    const removeBlockedDate = (dateToRemove: string) => {
+        setProfile(p => ({ ...p, blocked_dates: p.blocked_dates.filter(d => d !== dateToRemove) }));
+    };
+
+    const addBlockedTime = () => {
+        if (newBlockedTime) {
+            const dayTimes = profile.blocked_times[selectedDay] || [];
+            if (!dayTimes.includes(newBlockedTime)) {
+                setProfile(p => ({
+                    ...p,
+                    blocked_times: {
+                        ...p.blocked_times,
+                        [selectedDay]: [...dayTimes, newBlockedTime].sort()
+                    }
+                }));
+            }
+            setNewBlockedTime('');
+        }
+    };
+
+    const removeBlockedTime = (day: string, timeToRemove: string) => {
+        setProfile(p => ({
+            ...p,
+            blocked_times: {
+                ...p.blocked_times,
+                [day]: (p.blocked_times[day] || []).filter(t => t !== timeToRemove)
+            }
+        }));
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Configurações do Perfil" size="lg">
+            {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
+                <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
+                    {/* Blocked Dates */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">Bloquear Datas Específicas</h3>
+                        <div className="flex space-x-2">
+                            <input type="date" value={newBlockedDate} onChange={e => setNewBlockedDate(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-2 text-white placeholder-gray-400" />
+                            <button onClick={addBlockedDate} className="bg-gray-600 text-white px-4 py-1 rounded-lg text-sm hover:bg-gray-500">Adicionar</button>
+                        </div>
+                        <ul className="mt-2 space-y-1">
+                            {profile.blocked_dates.map(date => (
+                                <li key={date} className="flex justify-between items-center bg-black/20 p-2 rounded">
+                                    <span className="text-sm text-gray-300">{new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                    <button onClick={() => removeBlockedDate(date)} className="text-red-400 hover:text-red-300"><XIcon className="w-4 h-4" /></button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* Blocked Times */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">Bloquear Horários Recorrentes</h3>
+                        <div className="flex space-x-2 mb-2">
+                            <select value={selectedDay} onChange={e => setSelectedDay(e.target.value)} className="w-1/2 bg-black/20 border border-gray-600 rounded-lg p-2 text-white">
+                                {Object.entries(daysOfWeek).map(([key, value]) => <option key={key} value={key}>{value}</option>)}
+                            </select>
+                            <input type="time" value={newBlockedTime} onChange={e => setNewBlockedTime(e.target.value)} className="w-1/2 bg-black/20 border border-gray-600 rounded-lg p-2 text-white" />
+                            <button onClick={addBlockedTime} className="bg-gray-600 text-white px-4 py-1 rounded-lg text-sm hover:bg-gray-500">Adicionar</button>
+                        </div>
+                        <div className="space-y-2">
+                            {Object.entries(daysOfWeek).map(([key, value]) => (
+                                (profile.blocked_times[key]?.length ?? 0) > 0 && (
+                                    <div key={key}>
+                                        <p className="text-sm font-bold text-gray-300">{value}</p>
+                                        <ul className="flex flex-wrap gap-2 mt-1">
+                                            {(profile.blocked_times[key] || []).map(time => (
+                                                <li key={time} className="flex items-center space-x-2 bg-black/20 px-2 py-1 rounded text-sm text-gray-300">
+                                                    <span>{time}</span>
+                                                    <button onClick={() => removeBlockedTime(key, time)} className="text-red-400 hover:text-red-300"><XIcon className="w-3 h-3"/></button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <button onClick={handleSave} disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 mt-4">
+                        {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Configurações'}
+                    </button>
+                </div>
+            )}
+        </Modal>
+    );
+};
+
+
 const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -195,53 +338,116 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [time, setTime] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [validationError, setValidationError] = useState<string>('');
     const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
+    const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    
+    const dayMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+    const validateDateTime = useCallback((d: string, t: string) => {
+        if (!d || !t || !businessProfile) {
+            setValidationError('');
+            return true;
+        }
+
+        // Check blocked dates
+        if (businessProfile.blocked_dates.includes(d)) {
+            setValidationError('Esta data não está disponível para agendamento.');
+            return false;
+        }
+
+        // Check blocked times
+        const dayOfWeek = dayMap[new Date(d + 'T00:00:00').getUTCDay()];
+        const blockedTimesForDay = businessProfile.blocked_times[dayOfWeek] || [];
+        if (blockedTimesForDay.includes(t)) {
+            setValidationError('Este horário não está disponível para agendamento.');
+            return false;
+        }
+
+        setValidationError('');
+        return true;
+    }, [businessProfile]);
 
     useEffect(() => {
-        const fetchAdminProfile = async () => {
+        validateDateTime(date, time);
+    }, [date, time, validateDateTime]);
+
+    useEffect(() => {
+        const fetchAdminProfiles = async () => {
             setIsLoading(true);
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', adminId)
-                .single();
-            
-            if (error) {
-                console.error('Erro ao buscar perfil do admin:', error);
-                setMessage({ type: 'error', text: 'Não foi possível carregar a página de agendamento.' });
-            } else if (data) {
+            try {
+                const [profileRes, businessProfileRes] = await Promise.all([
+                    supabase.from('profiles').select('*').eq('id', adminId).single(),
+                    supabase.from('business_profiles').select('*').eq('user_id', adminId).single()
+                ]);
+
+                if (profileRes.error) throw profileRes.error;
+                
                 const today = new Date().toISOString().split('T')[0];
-                if(data.last_usage_date !== today) {
-                    setAdminProfile({ ...data, daily_usage: 0 });
+                if (profileRes.data.last_usage_date !== today) {
+                    setAdminProfile({ ...profileRes.data, daily_usage: 0 });
                 } else {
-                    setAdminProfile(data);
+                    setAdminProfile(profileRes.data);
                 }
+
+                if (businessProfileRes.data) {
+                    setBusinessProfile(businessProfileRes.data);
+                }
+
+            } catch (error) {
+                console.error('Erro ao buscar perfis do admin:', error);
+                setMessage({ type: 'error', text: 'Não foi possível carregar a página de agendamento.' });
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
-        fetchAdminProfile();
+        fetchAdminProfiles();
     }, [adminId]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setMessage(null);
 
-        if (adminProfile && adminProfile.daily_usage >= 5) {
-            setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
+        if (!validateDateTime(date, time)) {
             return;
         }
 
         setIsSaving(true);
+
+        const { data: existingAppointment, error: existingError } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('user_id', adminId)
+            .eq('email', email)
+            .in('status', ['Pendente', 'Confirmado'])
+            .limit(1);
+
+        if (existingError) {
+            setMessage({ type: 'error', text: 'Ocorreu um erro ao verificar seus dados. Tente novamente.' });
+            setIsSaving(false);
+            return;
+        }
+
+        if (existingAppointment && existingAppointment.length > 0) {
+            setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este profissional.' });
+            setIsSaving(false);
+            return;
+        }
+
+        if (adminProfile && adminProfile.daily_usage >= 5) {
+            setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
+            setIsSaving(false);
+            return;
+        }
+
         const { error } = await supabase.from('appointments').insert({
             name, email, date, time, user_id: adminId, status: 'Pendente'
         });
 
         if (error) {
-            setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento. Tente novamente.' });
-            console.error(error);
+            setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
-             // Increment usage for admin
             if (adminProfile) {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
@@ -255,7 +461,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
+            <div className="min-h-screen bg-black flex justify-center items-center">
                 <LoaderIcon className="w-12 h-12 text-white" />
             </div>
         )
@@ -275,11 +481,16 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                        <input type="email" placeholder="Seu Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                        <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                        <button type="submit" disabled={isSaving || (adminProfile?.daily_usage ?? 0) >= 5} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        <input type="email" placeholder="Seu Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        
+                        {validationError && (
+                            <p className="text-sm text-red-400 text-center">{validationError}</p>
+                        )}
+
+                        <button type="submit" disabled={isSaving || !!validationError || (adminProfile?.daily_usage ?? 0) >= 5} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                         </button>
                     </form>
@@ -324,6 +535,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
 
     const TRIAL_LIMIT = 5;
     const usage = profile?.daily_usage ?? 0;
@@ -412,7 +625,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             </div>
             <nav className="flex-grow">
                 <ul className="space-y-2">
-                    <li><button onClick={() => {}} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg"><CalendarIcon className="w-5 h-5"/><span>Agendamentos</span></button></li>
+                    <li><button onClick={() => {}} className="w-full flex items-center space-x-3 text-gray-300 bg-gray-700/50 p-3 rounded-lg"><CalendarIcon className="w-5 h-5"/><span>Agendamentos</span></button></li>
                     <li>
                         <button 
                             onClick={() => setIsLinkModalOpen(true)} 
@@ -420,6 +633,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                             className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <LinkIcon className="w-5 h-5"/><span>Links de Reserva</span>
+                        </button>
+                    </li>
+                     <li>
+                        <button 
+                            onClick={() => setIsProfileModalOpen(true)} 
+                            className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg"
+                        >
+                            <SettingsIcon className="w-5 h-5"/><span>Configurações</span>
                         </button>
                     </li>
                 </ul>
@@ -506,6 +727,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
+        <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} userId={user.id} />
       </div>
     );
 };
