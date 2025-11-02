@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -430,11 +429,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         };
 
         const appointmentsChannel = supabase
-            .channel(`public:appointments:${user.id}`)
+            .channel('public-appointments')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleInsert)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleUpdate)
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleDelete)
-            .subscribe();
+            .subscribe((status, err) => {
+                if (status === 'CHANNEL_ERROR' && err) {
+                    console.error('Realtime subscription error:', err);
+                    setError('Falha na conexão em tempo real. Tente recarregar a página.');
+                }
+            });
 
         return () => {
             supabase.removeChannel(appointmentsChannel);
