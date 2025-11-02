@@ -48,6 +48,21 @@ const parseDateAsUTC = (dateString: string): Date => {
     return new Date(Date.UTC(year, month - 1, day));
 };
 
+const maskPhone = (value: string) => {
+    if (!value) return "";
+    value = value.replace(/\D/g, '');
+    value = value.substring(0, 11);
+    if (value.length > 6) {
+        value = value.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
+    } else if (value.length > 2) {
+        value = value.replace(/^(\d{2})(\d{0,5}).*/, '($1) $2');
+    } else if (value.length > 0) {
+        value = value.replace(/^(\d*)/, '($1');
+    }
+    return value;
+};
+
+
 // --- Ícones ---
 const Icon = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
   <svg
@@ -80,7 +95,7 @@ const CopyIcon = (props: any) => <Icon {...props}><rect x="9" y="9" width="13" h
 const AlertCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></Icon>;
 const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></Icon>;
 const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
-const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
+const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
 const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
 const ChevronLeftIcon = (props: any) => <Icon {...props}><polyline points="15 18 9 12 15 6"></polyline></Icon>;
 const ChevronRightIcon = (props: any) => <Icon {...props}><polyline points="9 18 15 12 9 6"></polyline></Icon>;
@@ -110,7 +125,7 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-lg font-bold text-white">{appointment.name}</h3>
-            {appointment.phone && <p className="text-sm text-gray-400">{appointment.phone}</p>}
+            {appointment.phone && <p className="text-sm text-gray-400">{maskPhone(appointment.phone)}</p>}
             {appointment.email && <p className="text-xs text-gray-500">{appointment.email}</p>}
           </div>
           <StatusBadge status={appointment.status} />
@@ -184,8 +199,13 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const unmaskedPhone = phone.replace(/\D/g, '');
+        if (unmaskedPhone.length !== 11) {
+            alert('Por favor, insira um telefone válido com 11 dígitos (DDD + número).');
+            return;
+        }
         setIsSaving(true);
-        await onSave(name, phone, email, date, time);
+        await onSave(name, unmaskedPhone, email, date, time);
         setIsSaving(false);
         setName(''); setEmail(''); setPhone(''); setDate(''); setTime('');
         onClose();
@@ -195,7 +215,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
         <Modal isOpen={isOpen} onClose={onClose} title="Novo Agendamento">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                <input type="tel" placeholder="Telefone do Cliente" value={phone} onChange={e => setPhone(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="tel" placeholder="Telefone do Cliente (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="email" placeholder="Email do Cliente (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
@@ -561,12 +581,18 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         if (!selectedDate || !selectedTime) return;
 
         setMessage(null);
+        const unmaskedPhone = phone.replace(/\D/g, '');
+        if (unmaskedPhone.length !== 11) {
+            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 11 dígitos (DDD + número).' });
+            return;
+        }
+
         setIsSaving(true);
         
         const dateString = selectedDate.toISOString().split('T')[0];
 
         const { data: existingAppointment } = await supabase
-            .from('appointments').select('id').eq('user_id', adminId).eq('phone', phone).in('status', ['Pendente', 'Confirmado']).limit(1);
+            .from('appointments').select('id').eq('user_id', adminId).eq('phone', unmaskedPhone).in('status', ['Pendente', 'Confirmado']).limit(1);
 
         if (existingAppointment && existingAppointment.length > 0) {
             setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este número de telefone.' });
@@ -581,7 +607,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         }
 
         const { error } = await supabase.from('appointments').insert({
-            name, email, phone, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
+            name, email, phone: unmaskedPhone, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
         });
 
         if (error) {
@@ -673,7 +699,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        <input type="tel" placeholder="Seu Telefone" value={phone} onChange={e => setPhone(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        <input type="tel" placeholder="Seu Telefone (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
                         <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
                         
                         <Calendar />
