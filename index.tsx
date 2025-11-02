@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -35,6 +34,14 @@ type BusinessProfile = {
 type User = {
     id: string;
     email?: string;
+};
+
+// --- Helpers ---
+const parseDateAsUTC = (dateString: string): Date => {
+    if (!dateString) return new Date();
+    const [year, month, day] = dateString.split('-').map(Number);
+    // Month is 0-indexed for Date.UTC
+    return new Date(Date.UTC(year, month - 1, day));
 };
 
 // --- Ícones ---
@@ -95,7 +102,7 @@ const AppointmentCard = ({ appointment, onUpdateStatus }: { appointment: Appoint
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0 text-sm text-gray-300">
           <div className="flex items-center space-x-2">
             <CalendarIcon className="w-4 h-4 text-gray-500" />
-            <span>{new Date(appointment.date + 'T00:00:00').toLocaleDateString('pt-BR', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            <span>{parseDateAsUTC(appointment.date).toLocaleDateString('pt-BR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</span>
           </div>
           <div className="flex items-center space-x-2">
             <ClockIcon className="w-4 h-4 text-gray-500" />
@@ -285,7 +292,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                         <ul className="mt-2 space-y-1">
                             {profile.blocked_dates.map(date => (
                                 <li key={date} className="flex justify-between items-center bg-black/20 p-2 rounded">
-                                    <span className="text-sm text-gray-300">{new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                    <span className="text-sm text-gray-300">{parseDateAsUTC(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
                                     <button onClick={() => removeBlockedDate(date)} className="text-red-400 hover:text-red-300"><XIcon className="w-4 h-4" /></button>
                                 </li>
                             ))}
@@ -343,11 +350,17 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     
-    const dayMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
     const validateDateTime = useCallback((d: string, t: string) => {
-        if (!d || !t || !businessProfile) {
+        if (!d || !t) {
             setValidationError('');
+            return true;
+        }
+
+        if (!businessProfile) {
+            // Can't validate if profile hasn't loaded, so allow for now.
+            // The loading state should prevent submission anyway.
             return true;
         }
 
@@ -358,7 +371,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         }
 
         // Check blocked times
-        const dayOfWeek = dayMap[new Date(d + 'T00:00:00').getUTCDay()];
+        const dayOfWeek = dayMap[parseDateAsUTC(d).getUTCDay()];
         const blockedTimesForDay = businessProfile.blocked_times[dayOfWeek] || [];
         if (blockedTimesForDay.includes(t)) {
             setValidationError('Este horário não está disponível para agendamento.');
@@ -367,7 +380,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
         setValidationError('');
         return true;
-    }, [businessProfile]);
+    }, [businessProfile, dayMap]);
 
     useEffect(() => {
         validateDateTime(date, time);
