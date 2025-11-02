@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -78,6 +79,9 @@ const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><li
 const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
 const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
 const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
+const ChevronLeftIcon = (props: any) => <Icon {...props}><polyline points="15 18 9 12 15 6"></polyline></Icon>;
+const ChevronRightIcon = (props: any) => <Icon {...props}><polyline points="9 18 15 12 9 6"></polyline></Icon>;
+
 
 // --- Componentes de UI ---
 const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
@@ -414,55 +418,30 @@ const UpgradeModal = ({ isOpen, onClose, limit }: { isOpen: boolean, onClose: ()
 const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
-    const [date, setDate] = useState('');
-    const [time, setTime] = useState('');
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-    const [validationError, setValidationError] = useState<string>('');
+    
     const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
     const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+// FIX: The `appointments` state in `PaginaDeAgendamento` was incorrectly typed as `Appointment[]` but was only ever populated with and used for `date` and `time` properties. This has been corrected to `{ date: string; time: string; }[]` to match its actual usage.
+    const [appointments, setAppointments] = useState<{ date: string; time: string; }[]>([]);
     
+    const [isLoading, setIsLoading] = useState(true);
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
-    const validateDateTime = useCallback((d: string, t: string, profile: BusinessProfile | null): string => {
-        if (!d || !t || !profile) {
-            return '';
-        }
-
-        const dayOfWeek = dayMap[parseDateAsUTC(d).getUTCDay()];
-        
-        // Check working days
-        if (profile.working_days && !profile.working_days[dayOfWeek]) {
-            return 'Este dia da semana não está disponível para agendamento.';
-        }
-
-        // Check blocked dates (whole day)
-        if (profile.blocked_dates && profile.blocked_dates.includes(d)) {
-            return 'Esta data não está disponível para agendamento.';
-        }
-
-        // Check blocked recurring times
-        const blockedTimesForDay = (profile.blocked_times && profile.blocked_times[dayOfWeek]) || [];
-        if (blockedTimesForDay.includes(t)) {
-            return 'Este horário não está disponível para agendamento.';
-        }
-
-        return '';
-    }, [dayMap]);
-
     useEffect(() => {
-        const errorMsg = validateDateTime(date, time, businessProfile);
-        setValidationError(errorMsg);
-    }, [date, time, businessProfile, validateDateTime]);
-
-    useEffect(() => {
-        const fetchAdminProfiles = async () => {
+        const fetchAdminData = async () => {
             setIsLoading(true);
             try {
-                const [profileRes, businessProfileRes] = await Promise.all([
+                const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
                     supabase.from('profiles').select('*').eq('id', adminId).single(),
-                    supabase.from('business_profiles').select('*').eq('user_id', adminId).single()
+                    supabase.from('business_profiles').select('*').eq('user_id', adminId).single(),
+                    supabase.from('appointments').select('date, time').eq('user_id', adminId).in('status', ['Pendente', 'Confirmado'])
                 ]);
 
                 if (profileRes.error) throw profileRes.error;
@@ -474,6 +453,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     setAdminProfile(profileRes.data);
                 }
 
+                setAppointments(appointmentsRes.data || []);
+                
                 const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
                 if (businessProfileRes.data) {
                     setBusinessProfile({
@@ -483,46 +464,72 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                         working_days: businessProfileRes.data.working_days || defaultWorkingDays,
                     });
                 } else {
-                    // Handle case where no business profile exists
                     setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays });
                 }
 
             } catch (error) {
-                console.error('Erro ao buscar perfis do admin:', error);
+                console.error('Erro ao buscar dados do admin:', error);
                 setMessage({ type: 'error', text: 'Não foi possível carregar a página de agendamento.' });
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchAdminProfiles();
+        fetchAdminData();
     }, [adminId]);
+
+    const isDayAvailable = useCallback((date: Date): boolean => {
+        if (!businessProfile) return false;
+
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        if (date < today) return false;
+
+        const dateString = date.toISOString().split('T')[0];
+        const dayOfWeek = dayMap[date.getUTCDay()];
+        
+        if (businessProfile.working_days && !businessProfile.working_days[dayOfWeek]) return false;
+        if (businessProfile.blocked_dates && businessProfile.blocked_dates.includes(dateString)) return false;
+        
+        return true;
+    }, [businessProfile, dayMap]);
+
+    const availableTimeSlots = useMemo(() => {
+        if (!selectedDate || !businessProfile) return [];
+        
+        const slots = [];
+        // Generate slots from 9 AM to 5 PM every 30 minutes
+        for (let hour = 9; hour < 17; hour++) {
+            slots.push(`${String(hour).padStart(2, '0')}:00`);
+            slots.push(`${String(hour).padStart(2, '0')}:30`);
+        }
+
+        const dateString = selectedDate.toISOString().split('T')[0];
+        const dayOfWeek = dayMap[selectedDate.getUTCDay()];
+
+        const bookedTimes = appointments
+            .filter(a => a.date === dateString)
+            .map(a => a.time);
+            
+        const blockedRecurringTimes = businessProfile.blocked_times[dayOfWeek] || [];
+
+        return slots.filter(slot => 
+            !bookedTimes.includes(slot) && 
+            !blockedRecurringTimes.includes(slot)
+        );
+    }, [selectedDate, businessProfile, appointments, dayMap]);
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!selectedDate || !selectedTime) return;
+
         setMessage(null);
-
-        // Re-validate on submit to prevent race conditions
-        const finalValidationError = validateDateTime(date, time, businessProfile);
-        if (finalValidationError) {
-            setValidationError(finalValidationError);
-            return;
-        }
-
         setIsSaving(true);
+        
+        const dateString = selectedDate.toISOString().split('T')[0];
 
-        const { data: existingAppointment, error: existingError } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('user_id', adminId)
-            .eq('email', email)
-            .in('status', ['Pendente', 'Confirmado'])
-            .limit(1);
-
-        if (existingError) {
-            setMessage({ type: 'error', text: 'Ocorreu um erro ao verificar seus dados. Tente novamente.' });
-            setIsSaving(false);
-            return;
-        }
+        const { data: existingAppointment } = await supabase
+            .from('appointments').select('id').eq('user_id', adminId).eq('email', email).in('status', ['Pendente', 'Confirmado']).limit(1);
 
         if (existingAppointment && existingAppointment.length > 0) {
             setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este profissional.' });
@@ -537,7 +544,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         }
 
         const { error } = await supabase.from('appointments').insert({
-            name, email, date, time, user_id: adminId, status: 'Pendente'
+            name, email, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
         });
 
         if (error) {
@@ -549,17 +556,74 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
             }
             setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
-            setName(''); setEmail(''); setDate(''); setTime('');
+// FIX: The incorrect type assertion `as Appointment` has been removed. The object being added to the state now correctly matches the updated state type.
+            setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
+            setName(''); setEmail(''); setSelectedDate(null); setSelectedTime(null);
         }
         setIsSaving(false);
     };
 
-    if (isLoading) {
+    const handleDateSelect = (date: Date) => {
+        if (isDayAvailable(date)) {
+            setSelectedDate(date);
+            setSelectedTime(null);
+        }
+    };
+    
+    const changeMonth = (amount: number) => {
+      setCurrentMonth(prev => {
+          const newDate = new Date(prev.getFullYear(), prev.getMonth() + amount, 1);
+          return newDate;
+      });
+    };
+
+    const Calendar = () => {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        const days = Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`}></div>);
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(Date.UTC(year, month, day));
+            const isAvailable = isDayAvailable(date);
+            const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
+            
+            let classes = "w-10 h-10 flex items-center justify-center rounded-full transition-colors text-sm ";
+            if (isAvailable) {
+                classes += isSelected 
+                    ? "bg-gray-200 text-black font-bold" 
+                    : "bg-black/20 text-white hover:bg-gray-700 cursor-pointer";
+            } else {
+                classes += "text-gray-600 cursor-not-allowed";
+            }
+            
+            days.push(
+                <button key={day} onClick={() => handleDateSelect(date)} disabled={!isAvailable} className={classes}>
+                    {day}
+                </button>
+            );
+        }
+
         return (
-            <div className="min-h-screen bg-black flex justify-center items-center">
-                <LoaderIcon className="w-12 h-12 text-white" />
+            <div className="bg-black/20 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeftIcon className="w-5 h-5 text-white"/></button>
+                    <h3 className="font-bold text-white text-lg">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+                    <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
+                </div>
+                <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
+                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => <div key={d}>{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                    {days}
+                </div>
             </div>
-        )
+        );
+    };
+
+    if (isLoading) {
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     return (
@@ -569,23 +633,37 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     <h1 className="text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
                     <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
 
-                    {message && (
-                        <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                            {message.text}
-                        </div>
-                    )}
+                    {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
                         <input type="email" placeholder="Seu Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
                         
-                        {validationError && (
-                            <p className="text-sm text-red-400 text-center">{validationError}</p>
+                        <Calendar />
+
+                        {selectedDate && (
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
+                                {availableTimeSlots.length > 0 ? (
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                        {availableTimeSlots.map(time => (
+                                            <button 
+                                                key={time} 
+                                                type="button"
+                                                onClick={() => setSelectedTime(time)}
+                                                className={`p-2 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
+                                            >
+                                                {time}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
+                                )}
+                            </div>
                         )}
 
-                        <button type="submit" disabled={isSaving || !!validationError || !date || !time || !name || !email} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !email} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                         </button>
                     </form>
