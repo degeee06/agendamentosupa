@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI, Type } from '@google/genai';
+
+declare let jspdf: any;
 
 const SUPABASE_URL = 'https://ehosmvbealefukkbqggp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVob3NtdmJlYWxlZnVra2JxZ2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjIzMDgsImV4cCI6MjA3NzU5ODMwOH0.IKqwxawiPnZT__Djj6ISgnQOawKnbboJ1TfqhSTf89M';
@@ -40,6 +43,12 @@ type User = {
     id: string;
     email?: string;
 };
+
+type AssistantMessage = {
+    sender: 'user' | 'ai' | 'system';
+    text: string;
+};
+
 
 // --- Helpers ---
 const parseDateAsUTC = (dateString: string): Date => {
@@ -100,6 +109,9 @@ const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r=
 const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
 const ChevronLeftIcon = (props: any) => <Icon {...props}><polyline points="15 18 9 12 15 6"></polyline></Icon>;
 const ChevronRightIcon = (props: any) => <Icon {...props}><polyline points="9 18 15 12 9 6"></polyline></Icon>;
+const DownloadIcon = (props: any) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></Icon>;
+const BotIcon = (props: any) => <Icon {...props}><path d="M12 8V4H8" /><rect x="4" y="12" width="16" height="8" rx="2" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="M12 12v-2" /></Icon>;
+const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></Icon>;
 
 
 // --- Componentes de UI ---
@@ -202,8 +214,8 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const unmaskedPhone = phone.replace(/\D/g, '');
-        if (unmaskedPhone.length !== 11) {
-            alert('Por favor, insira um telefone válido com 11 dígitos (DDD + número).');
+        if (unmaskedPhone.length < 10 || unmaskedPhone.length > 11) {
+            alert('Por favor, insira um telefone válido com 10 ou 11 dígitos (DDD + número).');
             return;
         }
         setIsSaving(true);
@@ -512,6 +524,62 @@ const TermsModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void 
     );
 };
 
+const AssistantModal = ({ isOpen, onClose, messages, onSendMessage, isLoading }: { isOpen: boolean; onClose: () => void; messages: AssistantMessage[]; onSendMessage: (message: string) => void; isLoading: boolean; }) => {
+    const [input, setInput] = useState('');
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(scrollToBottom, [messages, isLoading]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (input.trim() && !isLoading) {
+            onSendMessage(input.trim());
+            setInput('');
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Assistente IA" size="lg">
+            <div className="flex flex-col h-[60vh]">
+                <div className="flex-1 overflow-y-auto space-y-4 p-4 scrollbar-hide">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender === 'user' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-200'}`}>
+                                <p className="text-sm">{msg.text}</p>
+                            </div>
+                        </div>
+                    ))}
+                    {isLoading && (
+                        <div className="flex justify-start">
+                            <div className="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl bg-gray-800 text-gray-200">
+                                <LoaderIcon className="w-5 h-5 text-gray-400" />
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
+                <form onSubmit={handleSubmit} className="mt-4 flex items-center space-x-2">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        placeholder="Ex: Agendar para João às 15h amanhã"
+                        className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        disabled={isLoading}
+                    />
+                    <button type="submit" disabled={isLoading || !input.trim()} className="p-3 bg-gray-600 rounded-lg text-white hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <SendIcon className="w-6 h-6" />
+                    </button>
+                </form>
+            </div>
+        </Modal>
+    );
+};
+
 
 const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [name, setName] = useState('');
@@ -632,8 +700,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
         setMessage(null);
         const unmaskedPhone = phone.replace(/\D/g, '');
-        if (unmaskedPhone.length !== 11) {
-            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 11 dígitos (DDD + número).' });
+        if (unmaskedPhone.length < 10 || unmaskedPhone.length > 11) {
+            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 10 ou 11 dígitos (DDD + número).' });
             return;
         }
 
@@ -856,6 +924,7 @@ const LoginPage = () => {
 
 const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile | null, setProfile: React.Dispatch<React.SetStateAction<Profile | null>>}) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
     const [statusFilter, setStatusFilter] = useState<'Pendente' | 'Confirmado' | 'Cancelado' | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -864,6 +933,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+    const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
+    const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
+        { sender: 'ai', text: 'Olá! Como posso ajudar a organizar sua agenda hoje?' }
+    ]);
+    const [isAssistantLoading, setIsAssistantLoading] = useState(false);
 
 
     const TRIAL_LIMIT = 5;
@@ -893,28 +968,47 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
     }, []);
 
-    const fetchAppointments = useCallback(async () => {
-        const { data, error } = await supabase
-            .from('appointments')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('date', { ascending: false })
-            .order('time', { ascending: false });
+    const fetchDashboardData = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const [appointmentsRes, businessProfileRes] = await Promise.all([
+                supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('time', { ascending: false }),
+                supabase.from('business_profiles').select('*').eq('user_id', user.id).single()
+            ]);
 
-        if (error) {
-            console.error("Erro ao buscar agendamentos:", error);
-            setError("Não foi possível carregar os agendamentos.");
-        } else {
-            setAppointments(data || []);
+            if (appointmentsRes.error) throw appointmentsRes.error;
+            setAppointments(appointmentsRes.data || []);
+            
+            const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+            const defaultStartTime = '09:00';
+            const defaultEndTime = '17:00';
+            
+            if (businessProfileRes.data) {
+                setBusinessProfile({
+                    ...businessProfileRes.data,
+                    blocked_dates: businessProfileRes.data.blocked_dates || [],
+                    blocked_times: businessProfileRes.data.blocked_times || {},
+                    working_days: businessProfileRes.data.working_days || defaultWorkingDays,
+                    start_time: businessProfileRes.data.start_time || defaultStartTime,
+                    end_time: businessProfileRes.data.end_time || defaultEndTime,
+                });
+            } else {
+                 setBusinessProfile({ user_id: user.id, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
+            }
+
+        } catch (error: any) {
+            console.error("Erro ao buscar dados do dashboard:", error);
+            setError("Não foi possível carregar os dados.");
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     }, [user.id]);
 
     useEffect(() => {
-        fetchAppointments();
-        const intervalId = setInterval(fetchAppointments, 15000); // Polling a cada 15s
+        fetchDashboardData();
+        const intervalId = setInterval(fetchDashboardData, 30000); // Polling
         return () => clearInterval(intervalId);
-    }, [fetchAppointments]);
+    }, [fetchDashboardData]);
 
     const filteredAppointments = useMemo(() => {
         return appointments
@@ -942,8 +1036,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         if (error) {
             console.error('Erro ao salvar:', error);
+            throw error;
         } else if (data) {
-            setAppointments(prev => [data, ...prev]);
+            setAppointments(prev => [data, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time)));
             const today = new Date().toISOString().split('T')[0];
             const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
             const { data: updatedProfile, error: profileError } = await supabase
@@ -962,6 +1057,77 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             }
         }
     };
+    
+    const handleSendMessageToAssistant = async (message: string) => {
+        if (!process.env.GEMINI_API_KEY) {
+            setAssistantMessages(prev => [...prev, { sender: 'ai', text: 'A chave da API do Gemini não foi configurada.' }]);
+            return;
+        }
+
+        setAssistantMessages(prev => [...prev, { sender: 'user', text: message }]);
+        setIsAssistantLoading(true);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+            const createAppointmentTool = {
+                functionDeclarations: [{
+                    name: 'create_appointment',
+                    description: 'Cria um novo agendamento para um cliente em uma data e hora específicas.',
+                    parameters: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING, description: 'O nome completo do cliente.' },
+                            date: { type: Type.STRING, description: 'A data do agendamento no formato AAAA-MM-DD.' },
+                            time: { type: Type.STRING, description: 'A hora do agendamento no formato HH:MM (24 horas).' },
+                            phone: { type: Type.STRING, description: 'O número de telefone do cliente, incluindo DDD. Somente números.' },
+                            email: { type: Type.STRING, description: 'O endereço de email do cliente.' },
+                        },
+                        required: ['name', 'date', 'time'],
+                    },
+                }],
+            };
+
+            const systemInstruction = `Você é um assistente inteligente para agendamento. Sua tarefa é interpretar pedidos do usuário para criar agendamentos. Você deve seguir estritamente as regras de negócio e os dados de contexto fornecidos. Não invente informações. Se um horário não estiver disponível, informe o usuário e não sugira alternativas. Responda de forma concisa em português do Brasil. A data e hora atual é ${new Date().toISOString()}. Considere "hoje" como a data atual, "amanhã" como o próximo dia, e assim por diante. Use o ano corrente.`;
+
+            const context = `
+                Contexto:
+                - Dias de trabalho: ${JSON.stringify(businessProfile?.working_days)}
+                - Horário de funcionamento: De ${businessProfile?.start_time} a ${businessProfile?.end_time}
+                - Datas bloqueadas: ${JSON.stringify(businessProfile?.blocked_dates)}
+                - Horários recorrentes bloqueados: ${JSON.stringify(businessProfile?.blocked_times)}
+                - Agendamentos existentes (ocupados): ${JSON.stringify(appointments.filter(a => a.status !== 'Cancelado').map(a => ({ date: a.date, time: a.time })))}
+            `;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: `${context}\n\nUsuário: ${message}`,
+                config: {
+                    tools: [createAppointmentTool],
+                    systemInstruction: systemInstruction,
+                }
+            });
+
+            if (response.functionCalls && response.functionCalls.length > 0) {
+                const fc = response.functionCalls[0];
+                if (fc.name === 'create_appointment') {
+                    const { name, date, time, phone = '', email = '' } = fc.args;
+                    // TODO: Add a final validation step here before saving
+                    await handleSaveAppointment(name, phone, email, date, time);
+                    setAssistantMessages(prev => [...prev, { sender: 'ai', text: `Agendamento para ${name} em ${parseDateAsUTC(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às ${time} foi criado com sucesso.` }]);
+                }
+            } else {
+                 setAssistantMessages(prev => [...prev, { sender: 'ai', text: response.text }]);
+            }
+
+        } catch (error) {
+            console.error("Erro do assistente de IA:", error);
+            setAssistantMessages(prev => [...prev, { sender: 'ai', text: 'Desculpe, ocorreu um erro ao processar sua solicitação.' }]);
+        } finally {
+            setIsAssistantLoading(false);
+        }
+    };
+
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
         const { data, error } = await supabase
@@ -993,6 +1159,43 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 setAppointments(prev => prev.filter(app => app.id !== id));
             }
         }
+    };
+    
+    const handleDownloadPDF = () => {
+        if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+            console.error("jsPDF library not loaded.");
+            alert("Não foi possível gerar o PDF. Por favor, recarregue a página e tente novamente.");
+            return;
+        }
+    
+        const { jsPDF } = jspdf;
+        const doc = new jsPDF();
+    
+        doc.text("Relatório de Agendamentos", 14, 16);
+    
+        const tableColumn = ["Cliente", "Data", "Hora", "Status", "Contato"];
+        const tableRows: (string | undefined)[][] = [];
+    
+        filteredAppointments.forEach(app => {
+            const appointmentData = [
+                app.name,
+                parseDateAsUTC(app.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
+                app.time,
+                app.status,
+                app.phone ? maskPhone(app.phone) : (app.email || 'N/A')
+            ];
+            tableRows.push(appointmentData);
+        });
+    
+        (doc as any).autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 20,
+            theme: 'striped',
+            headStyles: { fillColor: [28, 28, 30] },
+        });
+    
+        doc.save("agendamentos.pdf");
     };
 
 
@@ -1068,6 +1271,22 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         </a>
                     </div>
                 )}
+                <button
+                    onClick={handleDownloadPDF}
+                    className="glassmorphism p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors"
+                    aria-label="Baixar agendamentos em PDF"
+                    title="Baixar agendamentos em PDF"
+                >
+                    <DownloadIcon className="w-5 h-5" />
+                </button>
+                 <button
+                    onClick={() => setIsAssistantModalOpen(true)}
+                    className="glassmorphism p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors"
+                    aria-label="Abrir Assistente IA"
+                    title="Abrir Assistente IA"
+                >
+                    <BotIcon className="w-5 h-5" />
+                </button>
                 <div 
                   onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
                   className="inline-block"
@@ -1134,8 +1353,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
-        <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} userId={user.id} />
+        <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
         <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} />
+        <AssistantModal isOpen={isAssistantModalOpen} onClose={() => setIsAssistantModalOpen(false)} messages={assistantMessages} onSendMessage={handleSendMessageToAssistant} isLoading={isAssistantLoading} />
       </div>
     );
 };
