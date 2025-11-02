@@ -73,9 +73,16 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; }) => {
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }) => {
     return (
-      <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400">
+      <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
+        <button
+            onClick={() => onDelete(appointment.id)}
+            className="absolute top-4 right-4 text-gray-500 hover:text-red-400 transition-colors opacity-50 hover:opacity-100 z-10"
+            aria-label="Excluir agendamento"
+        >
+            <XIcon className="w-5 h-5" />
+        </button>
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-lg font-bold text-white">{appointment.name}</h3>
@@ -132,6 +139,25 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
         </div>
     );
 };
+
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, title: string, children: React.ReactNode }) => {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={title}>
+            <div className="text-gray-300 mb-6">
+                {children}
+            </div>
+            <div className="flex justify-end space-x-4">
+                <button onClick={onClose} className="bg-gray-700/50 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600/50 transition-colors">
+                    Cancelar
+                </button>
+                <button onClick={onConfirm} className="bg-red-500/80 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-500 transition-colors">
+                    Excluir Permanentemente
+                </button>
+            </div>
+        </Modal>
+    );
+};
+
 
 const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<boolean>, user: User }) => {
     const [name, setName] = useState('');
@@ -343,6 +369,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
+
 
     const TRIAL_LIMIT = 5;
     const usage = profile?.daily_usage ?? 0;
@@ -424,6 +453,29 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         } else if (data) {
             setAppointments(prev => prev.map(app => app.id === id ? data : app));
         }
+    };
+
+    const openDeleteModal = (id: string) => {
+        setAppointmentToDelete(id);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDeleteAppointment = async () => {
+        if (!appointmentToDelete) return;
+
+        const { error } = await supabase
+            .from('appointments')
+            .delete()
+            .eq('id', appointmentToDelete);
+        
+        if (error) {
+            console.error("Erro ao excluir agendamento:", error);
+        } else {
+            setAppointments(prev => prev.filter(app => app.id !== appointmentToDelete));
+        }
+
+        setIsDeleteModalOpen(false);
+        setAppointmentToDelete(null);
     };
 
 
@@ -523,7 +575,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 </div>
              ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredAppointments.map(app => <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus}/>)}
+                    {filteredAppointments.map(app => <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus} onDelete={openDeleteModal} />)}
                 </div>
              )}
           </div>
@@ -531,6 +583,15 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
+        <ConfirmationModal
+            isOpen={isDeleteModalOpen}
+            onClose={() => setIsDeleteModalOpen(false)}
+            onConfirm={handleDeleteAppointment}
+            title="Confirmar Exclusão"
+        >
+            <p>Você tem certeza que deseja excluir este agendamento?</p>
+            <p className="font-bold text-yellow-400 mt-2">Esta ação é permanente e não pode ser desfeita.</p>
+        </ConfirmationModal>
       </div>
     );
 };
