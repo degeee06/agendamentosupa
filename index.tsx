@@ -352,39 +352,30 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
-    const validateDateTime = useCallback((d: string, t: string) => {
-        if (!d || !t) {
-            setValidationError('');
-            return true;
+    const validateDateTime = useCallback((d: string, t: string, profile: BusinessProfile | null): string => {
+        if (!d || !t || !profile) {
+            return '';
         }
 
-        if (!businessProfile) {
-            // Can't validate if profile hasn't loaded, so allow for now.
-            // The loading state should prevent submission anyway.
-            return true;
+        // Check blocked dates (whole day)
+        if (profile.blocked_dates.includes(d)) {
+            return 'Esta data não está disponível para agendamento.';
         }
 
-        // Check blocked dates
-        if (businessProfile.blocked_dates.includes(d)) {
-            setValidationError('Esta data não está disponível para agendamento.');
-            return false;
-        }
-
-        // Check blocked times
+        // Check blocked recurring times
         const dayOfWeek = dayMap[parseDateAsUTC(d).getUTCDay()];
-        const blockedTimesForDay = businessProfile.blocked_times[dayOfWeek] || [];
+        const blockedTimesForDay = profile.blocked_times[dayOfWeek] || [];
         if (blockedTimesForDay.includes(t)) {
-            setValidationError('Este horário não está disponível para agendamento.');
-            return false;
+            return 'Este horário não está disponível para agendamento.';
         }
 
-        setValidationError('');
-        return true;
-    }, [businessProfile, dayMap]);
+        return '';
+    }, [dayMap]);
 
     useEffect(() => {
-        validateDateTime(date, time);
-    }, [date, time, validateDateTime]);
+        const errorMsg = validateDateTime(date, time, businessProfile);
+        setValidationError(errorMsg);
+    }, [date, time, businessProfile, validateDateTime]);
 
     useEffect(() => {
         const fetchAdminProfiles = async () => {
@@ -422,7 +413,10 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         e.preventDefault();
         setMessage(null);
 
-        if (!validateDateTime(date, time)) {
+        // Re-validate on submit to prevent race conditions
+        const finalValidationError = validateDateTime(date, time, businessProfile);
+        if (finalValidationError) {
+            setValidationError(finalValidationError);
             return;
         }
 
@@ -503,7 +497,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                             <p className="text-sm text-red-400 text-center">{validationError}</p>
                         )}
 
-                        <button type="submit" disabled={isSaving || !!validationError || (adminProfile?.daily_usage ?? 0) >= 5} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="submit" disabled={isSaving || !!validationError || !date || !time || !name || !email} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                         </button>
                     </form>
