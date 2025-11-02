@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI, Type } from '@google/genai';
 
 declare let jspdf: any;
 
@@ -1059,67 +1058,43 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     };
     
     const handleSendMessageToAssistant = async (message: string) => {
-        if (!process.env.GEMINI_API_KEY) {
-            setAssistantMessages(prev => [...prev, { sender: 'ai', text: 'A chave da API do Gemini não foi configurada.' }]);
-            return;
-        }
-
-        setAssistantMessages(prev => [...prev, { sender: 'user', text: message }]);
+        const currentMessages = [...assistantMessages, { sender: 'user' as const, text: message }];
+        setAssistantMessages(currentMessages);
         setIsAssistantLoading(true);
-
+    
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-            const createAppointmentTool = {
-                functionDeclarations: [{
-                    name: 'create_appointment',
-                    description: 'Cria um novo agendamento para um cliente em uma data e hora específicas.',
-                    parameters: {
-                        type: Type.OBJECT,
-                        properties: {
-                            name: { type: Type.STRING, description: 'O nome completo do cliente.' },
-                            date: { type: Type.STRING, description: 'A data do agendamento no formato AAAA-MM-DD.' },
-                            time: { type: Type.STRING, description: 'A hora do agendamento no formato HH:MM (24 horas).' },
-                            phone: { type: Type.STRING, description: 'O número de telefone do cliente, incluindo DDD. Somente números.' },
-                            email: { type: Type.STRING, description: 'O endereço de email do cliente.' },
-                        },
-                        required: ['name', 'date', 'time'],
-                    },
-                }],
-            };
-
-            const systemInstruction = `Você é um assistente inteligente para agendamento. Sua tarefa é interpretar pedidos do usuário para criar agendamentos. Você deve seguir estritamente as regras de negócio e os dados de contexto fornecidos. Não invente informações. Se um horário não estiver disponível, informe o usuário e não sugira alternativas. Responda de forma concisa em português do Brasil. A data e hora atual é ${new Date().toISOString()}. Considere "hoje" como a data atual, "amanhã" como o próximo dia, e assim por diante. Use o ano corrente.`;
-
             const context = `
-                Contexto:
                 - Dias de trabalho: ${JSON.stringify(businessProfile?.working_days)}
                 - Horário de funcionamento: De ${businessProfile?.start_time} a ${businessProfile?.end_time}
                 - Datas bloqueadas: ${JSON.stringify(businessProfile?.blocked_dates)}
                 - Horários recorrentes bloqueados: ${JSON.stringify(businessProfile?.blocked_times)}
                 - Agendamentos existentes (ocupados): ${JSON.stringify(appointments.filter(a => a.status !== 'Cancelado').map(a => ({ date: a.date, time: a.time })))}
             `;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: `${context}\n\nUsuário: ${message}`,
-                config: {
-                    tools: [createAppointmentTool],
-                    systemInstruction: systemInstruction,
-                }
+
+            const { data, error } = await supabase.functions.invoke('deepseek-assistant', {
+                body: {
+                  messages: currentMessages.map(m => ({ role: m.sender, content: m.text })),
+                  context,
+                },
             });
 
-            if (response.functionCalls && response.functionCalls.length > 0) {
-                const fc = response.functionCalls[0];
-                if (fc.name === 'create_appointment') {
-                    const { name, date, time, phone = '', email = '' } = fc.args;
-                    // TODO: Add a final validation step here before saving
+            if (error) throw error;
+            
+            const aiResponse = data.choices[0].message;
+            
+            if (aiResponse.tool_calls && aiResponse.tool_calls.length > 0) {
+                const toolCall = aiResponse.tool_calls[0].function;
+                if (toolCall.name === 'create_appointment') {
+                    const args = JSON.parse(toolCall.arguments);
+                    const { name, date, time, phone = '', email = '' } = args;
+
                     await handleSaveAppointment(name, phone, email, date, time);
                     setAssistantMessages(prev => [...prev, { sender: 'ai', text: `Agendamento para ${name} em ${parseDateAsUTC(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às ${time} foi criado com sucesso.` }]);
                 }
             } else {
-                 setAssistantMessages(prev => [...prev, { sender: 'ai', text: response.text }]);
+                 setAssistantMessages(prev => [...prev, { sender: 'ai', text: aiResponse.content }]);
             }
-
+    
         } catch (error) {
             console.error("Erro do assistente de IA:", error);
             setAssistantMessages(prev => [...prev, { sender: 'ai', text: 'Desculpe, ocorreu um erro ao processar sua solicitação.' }]);
