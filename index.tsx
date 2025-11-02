@@ -73,7 +73,7 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }) => {
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => unknown; onDelete: (id: string) => void; }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button
@@ -140,7 +140,7 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
     );
 };
 
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, title: string, children: React.ReactNode }) => {
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => unknown, title: string, children: React.ReactNode }) => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
             <div className="text-gray-300 mb-6">
@@ -396,9 +396,23 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     useEffect(() => {
         fetchAppointments();
-        const intervalId = setInterval(fetchAppointments, 15000); // Polling a cada 15s
-        return () => clearInterval(intervalId);
-    }, [fetchAppointments]);
+
+        const appointmentsChannel = supabase
+            .channel('public:appointments')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` },
+                (payload) => {
+                    // Re-fetch appointments to get the latest sorted data and reflect changes instantly.
+                    fetchAppointments();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(appointmentsChannel);
+        };
+    }, [user.id, fetchAppointments]);
 
     const filteredAppointments = useMemo(() => {
         return appointments
@@ -424,7 +438,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                  return false;
             }
         } else if (data) {
-            setAppointments(prev => [data, ...prev]);
+            // No need to manually update state, Supabase Realtime will trigger a re-fetch
             const today = new Date().toISOString().split('T')[0];
             const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
             const { data: updatedProfile, error: profileError } = await supabase
@@ -441,18 +455,15 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     };
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('appointments')
             .update({ status })
-            .eq('id', id)
-            .select()
-            .single();
+            .eq('id', id);
 
         if (error) {
             console.error("Erro ao atualizar status:", error);
-        } else if (data) {
-            setAppointments(prev => prev.map(app => app.id === id ? data : app));
         }
+        // No need to manually update state, Supabase Realtime will trigger a re-fetch
     };
 
     const openDeleteModal = (id: string) => {
@@ -470,9 +481,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         
         if (error) {
             console.error("Erro ao excluir agendamento:", error);
-        } else {
-            setAppointments(prev => prev.filter(app => app.id !== appointmentToDelete));
         }
+        // No need to manually update state, Supabase Realtime will trigger a re-fetch
 
         setIsDeleteModalOpen(false);
         setAppointmentToDelete(null);
