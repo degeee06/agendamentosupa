@@ -24,6 +24,7 @@ type Profile = {
     plan: 'trial' | 'premium';
     daily_usage: number;
     last_usage_date: string;
+    terms_accepted_at?: string;
 };
 
 type BusinessProfile = {
@@ -738,7 +739,13 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
 
 const LoginPage = () => {
+    const [termsAccepted, setTermsAccepted] = useState(false);
+    
     const handleLogin = async () => {
+        if (!termsAccepted) {
+            alert("Você precisa aceitar os Termos de Uso para continuar.");
+            return;
+        }
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -750,11 +757,28 @@ const LoginPage = () => {
 
     return (
         <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
-            <div className="text-center">
+            <div className="text-center w-full max-w-sm">
                  <CalendarIcon className="w-16 h-16 text-white mx-auto mb-4" />
-                 <h1 className="text-5xl font-bold text-white mb-2">Scheduler Pro</h1>
+                 <h1 className="text-5xl font-bold text-white mb-2">Oubook</h1>
                  <p className="text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
-                 <button onClick={handleLogin} className="bg-white text-black font-bold py-3 px-8 rounded-lg hover:bg-gray-200 transition-colors text-lg flex items-center mx-auto space-x-3">
+                 
+                 <div className="my-6">
+                    <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            checked={termsAccepted}
+                            onChange={() => setTermsAccepted(!termsAccepted)}
+                            className="h-4 w-4 accent-gray-400 bg-gray-800 border-gray-600 rounded focus:ring-gray-500"
+                        />
+                        <span className="text-sm text-gray-400">Eu li e aceito os <a href="#" className="underline hover:text-white">Termos de Uso</a></span>
+                    </label>
+                 </div>
+                 
+                 <button 
+                    onClick={handleLogin} 
+                    disabled={!termsAccepted}
+                    className="w-full bg-white text-black font-bold py-3 px-8 rounded-lg transition-all text-lg flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:bg-gray-200"
+                 >
                      <svg className="w-6 h-6" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.42-4.55H24v8.51h12.8c-.57 2.74-2.31 5.11-4.81 6.69l7.98 6.19c4.65-4.3 7.3-10.49 7.3-17.84z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.98-6.19c-2.11 1.45-4.81 2.3-7.91 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
                     <span>Entrar com Google</span>
                  </button>
@@ -911,7 +935,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         <aside className="w-64 glassmorphism p-6 flex-col hidden md:flex">
             <div className="flex items-center space-x-2 mb-10">
                 <CalendarIcon className="w-8 h-8 text-white"/>
-                <h1 className="text-2xl font-bold text-white">Scheduler Pro</h1>
+                <h1 className="text-2xl font-bold text-white">Oubook</h1>
             </div>
             <nav className="flex-grow">
                 <ul className="space-y-2">
@@ -1057,57 +1081,66 @@ const App = () => {
     const [path, setPath] = useState(window.location.pathname);
     
     useEffect(() => {
-      const checkUser = async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          const currentUser = session?.user ?? null;
+        const checkUser = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            const currentUser = session?.user ?? null;
 
-          if (currentUser) {
-              const { data: userProfile, error } = await supabase
-                  .from('profiles')
-                  .select('*')
-                  .eq('id', currentUser.id)
-                  .single();
+            if (currentUser) {
+                const { data: userProfile, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', currentUser.id)
+                    .single();
 
-              if (error) {
-                  console.error("Erro ao buscar perfil:", error);
-              } else if (userProfile) {
-                  const today = new Date().toISOString().split('T')[0];
-                  if (userProfile.last_usage_date !== today && userProfile.plan === 'trial') {
-                      // Reset usage if it's a new day for trial users
-                      const { data: updatedProfile, error: updateError } = await supabase
-                          .from('profiles')
-                          .update({ daily_usage: 0, last_usage_date: today })
-                          .eq('id', currentUser.id)
-                          .select()
-                          .single();
-                      if (updateError) console.error("Erro ao resetar uso:", updateError);
-                      else setProfile(updatedProfile);
-                  } else {
-                      setProfile(userProfile);
-                  }
-              }
+                if (!userProfile) { // This is a new user
+                    const { data: newProfile, error: insertError } = await supabase
+                        .from('profiles')
+                        .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                        .select()
+                        .single();
+
+                    if (insertError) console.error("Erro ao criar perfil:", insertError);
+                    else setProfile(newProfile);
+                } else {
+                    const today = new Date().toISOString().split('T')[0];
+                    if (userProfile.last_usage_date !== today && userProfile.plan === 'trial') {
+                        // Reset usage if it's a new day for trial users
+                        const { data: updatedProfile, error: updateError } = await supabase
+                            .from('profiles')
+                            .update({ daily_usage: 0, last_usage_date: today })
+                            .eq('id', currentUser.id)
+                            .select()
+                            .single();
+                        if (updateError) console.error("Erro ao resetar uso:", updateError);
+                        else setProfile(updatedProfile);
+                    } else {
+                        setProfile(userProfile);
+                    }
+                }
+                setUser({id: currentUser.id, email: currentUser.email});
+            }
+            setIsLoading(false);
+        };
+      
+        checkUser();
+
+        const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+            const currentUser = session?.user ?? null;
+            if (currentUser) {
               setUser({id: currentUser.id, email: currentUser.email});
-          }
-          setIsLoading(false);
-      };
+              if (!profile || profile.id !== currentUser.id) {
+                checkUser();
+              }
+            } else {
+              setUser(null);
+              setProfile(null);
+            }
+        });
       
-      checkUser();
-
-      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-          const currentUser = session?.user ?? null;
-          if (currentUser) {
-            setUser({id: currentUser.id, email: currentUser.email});
-            checkUser(); // Re-fetch profile on auth change
-          } else {
-            setUser(null);
-            setProfile(null);
-          }
-      });
-      
-      return () => {
-          authListener.subscription.unsubscribe();
-      };
-    }, []);
+        return () => {
+            authListener.subscription.unsubscribe();
+        };
+    }, [profile]);
 
     const router = useMemo(() => {
         const pathParts = path.split('/').filter(Boolean);
