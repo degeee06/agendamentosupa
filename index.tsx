@@ -28,9 +28,11 @@ type Profile = {
 
 type BusinessProfile = {
     user_id: string;
-    blocked_dates: string[]; // ['2024-12-25', '2025-01-01']
-    blocked_times: { [key: string]: string[] }; // { 'monday': ['12:00', '12:30'], 'saturday': [] }
-    working_days: { [key: string]: boolean }; // { 'monday': true, 'tuesday': false, ... }
+    blocked_dates: string[];
+    blocked_times: { [key: string]: string[] };
+    working_days: { [key: string]: boolean };
+    start_time?: string;
+    end_time?: string;
 }
 
 type User = {
@@ -226,7 +228,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
 };
 
 const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, onClose: () => void, userId: string }) => {
-    const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: {} });
+    const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: {}, start_time: '09:00', end_time: '17:00' });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [newBlockedDate, setNewBlockedDate] = useState('');
@@ -235,6 +237,8 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
 
     const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
     const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+    const defaultStartTime = '09:00';
+    const defaultEndTime = '17:00';
 
     useEffect(() => {
         if (isOpen) {
@@ -247,9 +251,11 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                         blocked_dates: data.blocked_dates || [],
                         blocked_times: data.blocked_times || {},
                         working_days: data.working_days || defaultWorkingDays,
+                        start_time: data.start_time || defaultStartTime,
+                        end_time: data.end_time || defaultEndTime,
                     });
                 } else {
-                    setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays });
+                    setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
                 }
                 setIsLoading(false);
             };
@@ -276,6 +282,10 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                 [day]: !p.working_days[day]
             }
         }));
+    };
+    
+    const handleTimeChange = (field: 'start_time' | 'end_time', value: string) => {
+        setProfile(p => ({ ...p, [field]: value }));
     };
 
     const addBlockedDate = () => {
@@ -319,6 +329,20 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         <Modal isOpen={isOpen} onClose={onClose} title="Configurações do Perfil" size="lg">
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
+                    {/* Working Hours */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-white mb-3">Horário de Funcionamento</h3>
+                        <div className="flex items-center space-x-4">
+                            <div className="w-1/2">
+                                <label className="text-sm text-gray-400 mb-1 block">Início</label>
+                                <input type="time" value={profile.start_time} onChange={e => handleTimeChange('start_time', e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-2 text-white" />
+                            </div>
+                            <div className="w-1/2">
+                                <label className="text-sm text-gray-400 mb-1 block">Fim</label>
+                                <input type="time" value={profile.end_time} onChange={e => handleTimeChange('end_time', e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-2 text-white" />
+                            </div>
+                        </div>
+                    </div>
                     {/* Working Days */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-3">Dias de Funcionamento</h3>
@@ -426,7 +450,6 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     
     const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
     const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
-// FIX: The `appointments` state in `PaginaDeAgendamento` was incorrectly typed as `Appointment[]` but was only ever populated with and used for `date` and `time` properties. This has been corrected to `{ date: string; time: string; }[]` to match its actual usage.
     const [appointments, setAppointments] = useState<{ date: string; time: string; }[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
@@ -456,15 +479,20 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 setAppointments(appointmentsRes.data || []);
                 
                 const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+                const defaultStartTime = '09:00';
+                const defaultEndTime = '17:00';
+
                 if (businessProfileRes.data) {
                     setBusinessProfile({
                         ...businessProfileRes.data,
                         blocked_dates: businessProfileRes.data.blocked_dates || [],
                         blocked_times: businessProfileRes.data.blocked_times || {},
                         working_days: businessProfileRes.data.working_days || defaultWorkingDays,
+                        start_time: businessProfileRes.data.start_time || defaultStartTime,
+                        end_time: businessProfileRes.data.end_time || defaultEndTime,
                     });
                 } else {
-                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays });
+                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
                 }
 
             } catch (error) {
@@ -497,10 +525,23 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         if (!selectedDate || !businessProfile) return [];
         
         const slots = [];
-        // Generate slots from 9 AM to 5 PM every 30 minutes
-        for (let hour = 9; hour < 17; hour++) {
-            slots.push(`${String(hour).padStart(2, '0')}:00`);
-            slots.push(`${String(hour).padStart(2, '0')}:30`);
+        const startTime = businessProfile.start_time || '09:00';
+        const endTime = businessProfile.end_time || '17:00';
+    
+        const [startHour, startMinute] = startTime.split(':').map(Number);
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+    
+        let currentHour = startHour;
+        let currentMinute = startMinute;
+    
+        while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
+            slots.push(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
+            
+            currentMinute += 30;
+            if (currentMinute >= 60) {
+                currentHour += 1;
+                currentMinute -= 60;
+            }
         }
 
         const dateString = selectedDate.toISOString().split('T')[0];
@@ -556,7 +597,6 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
             }
             setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
-// FIX: The incorrect type assertion `as Appointment` has been removed. The object being added to the state now correctly matches the updated state type.
             setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
             setName(''); setEmail(''); setSelectedDate(null); setSelectedTime(null);
         }
@@ -613,7 +653,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
                 </div>
                 <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
-                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => <div key={d}>{d}</div>)}
+                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
                 </div>
                 <div className="grid grid-cols-7 gap-2">
                     {days}
