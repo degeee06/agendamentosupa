@@ -879,6 +879,29 @@ const App = () => {
     const [path, setPath] = useState(window.location.pathname);
     
     useEffect(() => {
+        // Inject Hotmart script dynamically to ensure it runs after React mounts
+        const scriptId = 'hotmart-script';
+        const linkId = 'hotmart-css';
+    
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script'); 
+            script.id = scriptId;
+            script.src = 'https://static.hotmart.com/checkout/widget.min.js'; 
+            script.async = true;
+            document.head.appendChild(script); 
+        }
+    
+        if (!document.getElementById(linkId)) {
+            const link = document.createElement('link');
+            link.id = linkId;
+            link.rel = 'stylesheet'; 
+            link.type = 'text/css'; 
+            link.href = 'https://static.hotmart.com/css/hotmart-fb.min.css'; 
+            document.head.appendChild(link);
+        }
+    }, []);
+
+    useEffect(() => {
       const checkUser = async () => {
           const { data: { session } } = await supabase.auth.getSession();
           const currentUser = session?.user ?? null;
