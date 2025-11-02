@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -527,21 +526,12 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const slots = [];
         const startTime = businessProfile.start_time || '09:00';
         const endTime = businessProfile.end_time || '17:00';
-    
-        const [startHour, startMinute] = startTime.split(':').map(Number);
-        const [endHour, endMinute] = endTime.split(':').map(Number);
-    
-        let currentHour = startHour;
-        let currentMinute = startMinute;
-    
-        while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
-            slots.push(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
-            
-            currentMinute += 30;
-            if (currentMinute >= 60) {
-                currentHour += 1;
-                currentMinute -= 60;
-            }
+
+        const [startHour] = startTime.split(':').map(Number);
+        const [endHour] = endTime.split(':').map(Number);
+
+        for (let hour = startHour; hour < endHour; hour++) {
+            slots.push(`${String(hour).padStart(2, '0')}:00`);
         }
 
         const dateString = selectedDate.toISOString().split('T')[0];
