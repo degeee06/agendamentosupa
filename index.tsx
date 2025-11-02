@@ -29,6 +29,7 @@ type BusinessProfile = {
     user_id: string;
     blocked_dates: string[]; // ['2024-12-25', '2025-01-01']
     blocked_times: { [key: string]: string[] }; // { 'monday': ['12:00', '12:30'], 'saturday': [] }
+    working_days: { [key: string]: boolean }; // { 'monday': true, 'tuesday': false, ... }
 }
 
 type User = {
@@ -215,7 +216,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
 };
 
 const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, onClose: () => void, userId: string }) => {
-    const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {} });
+    const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: {} });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [newBlockedDate, setNewBlockedDate] = useState('');
@@ -223,14 +224,23 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     const [selectedDay, setSelectedDay] = useState('monday');
 
     const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
+    const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
 
     useEffect(() => {
         if (isOpen) {
             const fetchProfile = async () => {
                 setIsLoading(true);
                 const { data, error } = await supabase.from('business_profiles').select('*').eq('user_id', userId).single();
-                if (data) setProfile(data);
-                else setProfile({ user_id: userId, blocked_dates: [], blocked_times: {} });
+                if (data) {
+                    setProfile({
+                        ...data,
+                        blocked_dates: data.blocked_dates || [],
+                        blocked_times: data.blocked_times || {},
+                        working_days: data.working_days || defaultWorkingDays,
+                    });
+                } else {
+                    setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays });
+                }
                 setIsLoading(false);
             };
             fetchProfile();
@@ -246,6 +256,16 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             onClose();
         }
         setIsSaving(false);
+    };
+
+    const handleWorkingDayChange = (day: string) => {
+        setProfile(p => ({
+            ...p,
+            working_days: {
+                ...p.working_days,
+                [day]: !p.working_days[day]
+            }
+        }));
     };
 
     const addBlockedDate = () => {
@@ -289,6 +309,23 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         <Modal isOpen={isOpen} onClose={onClose} title="Configurações do Perfil" size="lg">
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
+                    {/* Working Days */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-white mb-3">Dias de Funcionamento</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {Object.entries(daysOfWeek).map(([key, value]) => (
+                                <label key={key} className="flex items-center space-x-3 bg-black/20 p-3 rounded-lg cursor-pointer hover:bg-black/40 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!profile.working_days[key]}
+                                        onChange={() => handleWorkingDayChange(key)}
+                                        className="h-5 w-5 accent-gray-400 bg-gray-700 border-gray-600 rounded focus:ring-gray-500"
+                                    />
+                                    <span className="text-white text-sm font-medium">{value}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
                     {/* Blocked Dates */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-2">Bloquear Datas Específicas</h3>
@@ -364,13 +401,19 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             return '';
         }
 
+        const dayOfWeek = dayMap[parseDateAsUTC(d).getUTCDay()];
+        
+        // Check working days
+        if (profile.working_days && !profile.working_days[dayOfWeek]) {
+            return 'Este dia da semana não está disponível para agendamento.';
+        }
+
         // Check blocked dates (whole day)
         if (profile.blocked_dates && profile.blocked_dates.includes(d)) {
             return 'Esta data não está disponível para agendamento.';
         }
 
         // Check blocked recurring times
-        const dayOfWeek = dayMap[parseDateAsUTC(d).getUTCDay()];
         const blockedTimesForDay = (profile.blocked_times && profile.blocked_times[dayOfWeek]) || [];
         if (blockedTimesForDay.includes(t)) {
             return 'Este horário não está disponível para agendamento.';
@@ -402,15 +445,17 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     setAdminProfile(profileRes.data);
                 }
 
+                const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
                 if (businessProfileRes.data) {
                     setBusinessProfile({
                         ...businessProfileRes.data,
                         blocked_dates: businessProfileRes.data.blocked_dates || [],
                         blocked_times: businessProfileRes.data.blocked_times || {},
+                        working_days: businessProfileRes.data.working_days || defaultWorkingDays,
                     });
                 } else {
                     // Handle case where no business profile exists
-                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {} });
+                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays });
                 }
 
             } catch (error) {
