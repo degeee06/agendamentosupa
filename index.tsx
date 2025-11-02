@@ -393,7 +393,7 @@ const UpgradeModal = ({ isOpen, onClose, limit }: { isOpen: boolean, onClose: ()
                     Seu limite de uso será reiniciado automaticamente amanhã, à meia-noite (00:00). Para continuar agendando hoje, faça o upgrade para o plano Premium.
                 </p>
                 <a 
-                    onClick={(e) => {e.preventDefault(); const newTab = window.open('https://pay.hotmart.com/U102480243K?checkoutMode=2', '_blank'); newTab?.focus();}}
+                    onClick={(e) => e.preventDefault()}
                     href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
                     className="hotmart-fb hotmart__button-checkout w-full block bg-yellow-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-yellow-400 transition-colors text-center"
                 >
@@ -791,7 +791,13 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
              <div className="flex items-center space-x-4">
                 <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3">
                     <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
-                    <button onClick={() => setIsUpgradeModalOpen(true)} className="bg-yellow-500/20 text-yellow-300 text-xs font-bold px-3 py-1 rounded-md hover:bg-yellow-500/40 transition-colors">UPGRADE</button>
+                    <a
+                        href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
+                        onClick={(e) => e.preventDefault()}
+                        className="hotmart-fb hotmart__button-checkout bg-yellow-500/20 text-yellow-300 text-xs font-bold px-3 py-1 rounded-md hover:bg-yellow-500/40 transition-colors"
+                    >
+                        UPGRADE
+                    </a>
                 </div>
                 <div 
                   onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
