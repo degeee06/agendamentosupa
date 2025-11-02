@@ -381,6 +381,29 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     );
 };
 
+const UpgradeModal = ({ isOpen, onClose, limit }: { isOpen: boolean, onClose: () => void, limit: number }) => {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Limite Diário Atingido">
+            <div className="text-center">
+                <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                <p className="text-gray-300 mb-4">
+                    Você atingiu o limite de {limit} usos diários para o plano Trial.
+                </p>
+                <p className="text-sm text-gray-400 mb-6">
+                    Seu limite de uso será reiniciado automaticamente amanhã, à meia-noite (00:00). Para continuar agendando hoje, faça o upgrade para o plano Premium.
+                </p>
+                <a 
+                    onClick={(e) => {e.preventDefault(); const newTab = window.open('https://pay.hotmart.com/U102480243K?checkoutMode=2', '_blank'); newTab?.focus();}}
+                    href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
+                    className="hotmart-fb hotmart__button-checkout w-full block bg-yellow-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-yellow-400 transition-colors text-center"
+                >
+                    Fazer Upgrade Agora
+                </a>
+            </div>
+        </Modal>
+    );
+};
+
 
 const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [name, setName] = useState('');
@@ -602,6 +625,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
 
     const TRIAL_LIMIT = 5;
@@ -710,13 +734,19 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 <ul className="space-y-2">
                     <li><button onClick={() => {}} className="w-full flex items-center space-x-3 text-gray-300 bg-gray-700/50 p-3 rounded-lg"><CalendarIcon className="w-5 h-5"/><span>Agendamentos</span></button></li>
                     <li>
-                        <button 
-                            onClick={() => setIsLinkModalOpen(true)} 
-                            disabled={hasReachedLimit}
-                            className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        <div 
+                            onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
+                            className="w-full"
                         >
-                            <LinkIcon className="w-5 h-5"/><span>Links de Reserva</span>
-                        </button>
+                            <button 
+                                onClick={() => { if (!hasReachedLimit) setIsLinkModalOpen(true); }}
+                                disabled={hasReachedLimit}
+                                style={hasReachedLimit ? { pointerEvents: 'none' } : {}}
+                                className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <LinkIcon className="w-5 h-5"/><span>Links de Reserva</span>
+                            </button>
+                        </div>
                     </li>
                      <li>
                         <button 
@@ -747,17 +777,24 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
           <header className="glassmorphism p-6 border-b border-gray-800/50 flex justify-between items-center">
              <h2 className="text-3xl font-bold text-white">Seus Agendamentos</h2>
              <div className="flex items-center space-x-4">
-                <div className="glassmorphism py-2 px-4 rounded-lg text-sm">
+                <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3">
                     <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
+                    <button onClick={() => setIsUpgradeModalOpen(true)} className="bg-yellow-500/20 text-yellow-300 text-xs font-bold px-3 py-1 rounded-md hover:bg-yellow-500/40 transition-colors">UPGRADE</button>
                 </div>
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    disabled={hasReachedLimit}
-                    className="bg-white text-black font-bold py-2 px-5 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                <div 
+                  onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
+                  className="inline-block"
                 >
-                    <PlusIcon className="w-5 h-5"/>
-                    <span>Novo Agendamento</span>
-                </button>
+                    <button 
+                        onClick={() => { if (!hasReachedLimit) setIsModalOpen(true); }}
+                        disabled={hasReachedLimit}
+                        style={hasReachedLimit ? { pointerEvents: 'none' } : {}}
+                        className="bg-white text-black font-bold py-2 px-5 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <PlusIcon className="w-5 h-5"/>
+                        <span>Novo Agendamento</span>
+                    </button>
+                </div>
              </div>
           </header>
 
@@ -811,6 +848,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
         <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} userId={user.id} />
+        <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} />
       </div>
     );
 };
