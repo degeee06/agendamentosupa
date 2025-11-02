@@ -666,6 +666,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const handleSaveAppointment = async (name: string, email: string, date: string, time: string) => {
         if (!profile) return;
+        
+        if (hasReachedLimit) {
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         const { data, error } = await supabase
             .from('appointments')
             .insert({ name, email, date, time, user_id: user.id })
@@ -684,8 +690,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 .eq('id', user.id)
                 .select()
                 .single();
-            if (profileError) console.error("Erro ao atualizar perfil:", profileError);
-            else setProfile(updatedProfile);
+            if (profileError) {
+                console.error("Erro ao atualizar perfil:", profileError);
+            } else if (updatedProfile) {
+                setProfile(updatedProfile);
+                if (updatedProfile.plan === 'trial' && updatedProfile.daily_usage >= TRIAL_LIMIT) {
+                    setIsUpgradeModalOpen(true);
+                }
+            }
         }
     };
 
