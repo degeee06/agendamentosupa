@@ -1078,6 +1078,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     content: m.text
                   })),
                   context,
+                  currentDate: new Date().toISOString(),
                 },
             });
 
