@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -73,7 +75,8 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => unknown; onDelete: (id: string) => void; }) => {
+// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving issues with special props like `key`.
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => unknown; onDelete: (id: string) => void; }): React.ReactElement => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button
@@ -125,7 +128,8 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
     );
 };
 
-const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }) => {
+// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors related to the `children` prop.
+const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }): React.ReactElement | null => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={onClose}>
@@ -140,7 +144,8 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
     );
 };
 
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => unknown, title: string, children: React.ReactNode }) => {
+// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => unknown, title: string, children: React.ReactNode }): React.ReactElement | null => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
             <div className="text-gray-300 mb-6">
@@ -159,7 +164,8 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { is
 };
 
 
-const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<boolean>, user: User }) => {
+// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
+const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<boolean>, user: User }): React.ReactElement | null => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [date, setDate] = useState('');
@@ -203,7 +209,8 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     );
 };
 
-const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) => {
+// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
+const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }): React.ReactElement | null => {
     const link = `${window.location.origin}/book/${userId}`;
     const [copied, setCopied] = useState(false);
 
@@ -378,6 +385,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
     const fetchAppointments = useCallback(async () => {
+        setIsLoading(true);
         const { data, error } = await supabase
             .from('appointments')
             .select('*')
@@ -397,16 +405,35 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     useEffect(() => {
         fetchAppointments();
 
+        const handleInsert = (payload: any) => {
+            const newAppointment = payload.new as Appointment;
+            setAppointments(current => {
+                const newAppointments = [newAppointment, ...current.filter(a => a.id !== newAppointment.id)];
+                newAppointments.sort((a, b) => {
+                    if (a.date !== b.date) {
+                        return new Date(b.date).getTime() - new Date(a.date).getTime();
+                    }
+                    return b.time.localeCompare(a.time);
+                });
+                return newAppointments;
+            });
+        };
+
+        const handleUpdate = (payload: any) => {
+            const updatedAppointment = payload.new as Appointment;
+            setAppointments(current => current.map(app => app.id === updatedAppointment.id ? updatedAppointment : app));
+        };
+
+        const handleDelete = (payload: any) => {
+            const deletedAppointmentId = payload.old.id;
+            setAppointments(current => current.filter(app => app.id !== deletedAppointmentId));
+        };
+
         const appointmentsChannel = supabase
-            .channel('public:appointments')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` },
-                (payload) => {
-                    // Re-fetch appointments to get the latest sorted data and reflect changes instantly.
-                    fetchAppointments();
-                }
-            )
+            .channel(`public:appointments:${user.id}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleInsert)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleUpdate)
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleDelete)
             .subscribe();
 
         return () => {
@@ -438,7 +465,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                  return false;
             }
         } else if (data) {
-            // No need to manually update state, Supabase Realtime will trigger a re-fetch
+            // No need to manually update state, Supabase Realtime will handle it
             const today = new Date().toISOString().split('T')[0];
             const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
             const { data: updatedProfile, error: profileError } = await supabase
@@ -463,7 +490,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         if (error) {
             console.error("Erro ao atualizar status:", error);
         }
-        // No need to manually update state, Supabase Realtime will trigger a re-fetch
+        // No need to manually update state, Supabase Realtime will handle it
     };
 
     const openDeleteModal = (id: string) => {
@@ -482,7 +509,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         if (error) {
             console.error("Erro ao excluir agendamento:", error);
         }
-        // No need to manually update state, Supabase Realtime will trigger a re-fetch
+        // No need to manually update state, Supabase Realtime will handle it
 
         setIsDeleteModalOpen(false);
         setAppointmentToDelete(null);
