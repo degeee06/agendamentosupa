@@ -790,6 +790,14 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 const LoginPage = () => {
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+    const [hasAcceptedPreviously, setHasAcceptedPreviously] = useState(false);
+
+    useEffect(() => {
+        if (localStorage.getItem('termsAccepted') === 'true') {
+            setHasAcceptedPreviously(true);
+            setTermsAccepted(true); // Pre-approve logically to enable the button
+        }
+    }, []);
     
     const handleLogin = async () => {
         if (!termsAccepted) {
@@ -814,15 +822,21 @@ const LoginPage = () => {
                      <p className="text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
                      
                      <div className="my-6">
-                        <label className="flex items-center justify-center space-x-2 cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                checked={termsAccepted}
-                                onChange={() => setTermsAccepted(!termsAccepted)}
-                                className="h-4 w-4 accent-gray-400 bg-gray-800 border-gray-600 rounded focus:ring-gray-500"
-                            />
-                            <span className="text-sm text-gray-400">Eu li e aceito os <button type="button" onClick={() => setIsTermsModalOpen(true)} className="underline hover:text-white">Termos de Uso</button></span>
-                        </label>
+                        {hasAcceptedPreviously ? (
+                            <p className="text-xs text-gray-500 text-center">
+                                Ao continuar, você concorda com nossos <button type="button" onClick={() => setIsTermsModalOpen(true)} className="underline hover:text-white">Termos de Uso</button>.
+                            </p>
+                        ) : (
+                            <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={termsAccepted}
+                                    onChange={() => setTermsAccepted(!termsAccepted)}
+                                    className="h-4 w-4 accent-gray-400 bg-gray-800 border-gray-600 rounded focus:ring-gray-500"
+                                />
+                                <span className="text-sm text-gray-400">Eu li e aceito os <button type="button" onClick={() => setIsTermsModalOpen(true)} className="underline hover:text-white">Termos de Uso</button></span>
+                            </label>
+                        )}
                      </div>
                      
                      <button 
@@ -1180,13 +1194,18 @@ const App = () => {
         const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
             const currentUser = session?.user ?? null;
             if (currentUser) {
-              setUser({id: currentUser.id, email: currentUser.email});
-              if (!profile || profile.id !== currentUser.id) {
-                checkUser();
-              }
+                setUser({id: currentUser.id, email: currentUser.email});
+                if (localStorage.getItem('termsAccepted') !== 'true') {
+                    localStorage.setItem('termsAccepted', 'true');
+                }
+                if (!profile || profile.id !== currentUser.id) {
+                    checkUser();
+                }
             } else {
-              setUser(null);
-              setProfile(null);
+                setUser(null);
+                setProfile(null);
+                // Optional: You could clear the flag on sign out if desired
+                // localStorage.removeItem('termsAccepted'); 
             }
         });
       
