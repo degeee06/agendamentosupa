@@ -358,13 +358,13 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         }
 
         // Check blocked dates (whole day)
-        if (profile.blocked_dates.includes(d)) {
+        if (profile.blocked_dates && profile.blocked_dates.includes(d)) {
             return 'Esta data não está disponível para agendamento.';
         }
 
         // Check blocked recurring times
         const dayOfWeek = dayMap[parseDateAsUTC(d).getUTCDay()];
-        const blockedTimesForDay = profile.blocked_times[dayOfWeek] || [];
+        const blockedTimesForDay = (profile.blocked_times && profile.blocked_times[dayOfWeek]) || [];
         if (blockedTimesForDay.includes(t)) {
             return 'Este horário não está disponível para agendamento.';
         }
@@ -396,7 +396,14 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 }
 
                 if (businessProfileRes.data) {
-                    setBusinessProfile(businessProfileRes.data);
+                    setBusinessProfile({
+                        ...businessProfileRes.data,
+                        blocked_dates: businessProfileRes.data.blocked_dates || [],
+                        blocked_times: businessProfileRes.data.blocked_times || {},
+                    });
+                } else {
+                    // Handle case where no business profile exists
+                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {} });
                 }
 
             } catch (error) {
@@ -442,7 +449,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             return;
         }
 
-        if (adminProfile && adminProfile.daily_usage >= 5) {
+        if (adminProfile && adminProfile.plan === 'trial' && adminProfile.daily_usage >= 5) {
             setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
             setIsSaving(false);
             return;
@@ -547,7 +554,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const TRIAL_LIMIT = 5;
     const usage = profile?.daily_usage ?? 0;
-    const hasReachedLimit = usage >= TRIAL_LIMIT;
+    const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
     const fetchAppointments = useCallback(async () => {
         const { data, error } = await supabase
