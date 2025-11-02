@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -38,7 +36,7 @@ const Icon = ({ children, className = '' }: { children: React.ReactNode; classNa
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
-    viewBox="0 0 24 24"
+    viewBox="0 0 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
@@ -403,51 +401,52 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         setIsLoading(false);
     }, [user.id]);
 
-    useEffect(() => {
-        const handleInsert = (payload: any) => {
-            const newAppointment = payload.new as Appointment;
-            setAppointments(current => {
-                const newAppointments = [newAppointment, ...current.filter(a => a.id !== newAppointment.id)];
-                newAppointments.sort((a, b) => {
-                    if (a.date !== b.date) {
-                        return new Date(b.date).getTime() - new Date(a.date).getTime();
-                    }
-                    return b.time.localeCompare(a.time);
-                });
-                return newAppointments;
+    const handleInsert = useCallback((payload: any) => {
+        const newAppointment = payload.new as Appointment;
+        setAppointments(current => {
+            const newAppointments = [newAppointment, ...current.filter(a => a.id !== newAppointment.id)];
+            newAppointments.sort((a, b) => {
+                if (a.date !== b.date) {
+                    return new Date(b.date).getTime() - new Date(a.date).getTime();
+                }
+                return b.time.localeCompare(a.time);
             });
-        };
+            return newAppointments;
+        });
+    }, []);
 
-        const handleUpdate = (payload: any) => {
-            const updatedAppointment = payload.new as Appointment;
-            setAppointments(current => current.map(app => app.id === updatedAppointment.id ? updatedAppointment : app));
-        };
+    const handleUpdate = useCallback((payload: any) => {
+        const updatedAppointment = payload.new as Appointment;
+        setAppointments(current => current.map(app => app.id === updatedAppointment.id ? updatedAppointment : app));
+    }, []);
 
-        const handleDelete = (payload: any) => {
-            const deletedAppointmentId = payload.old.id;
-            setAppointments(current => current.filter(app => app.id !== deletedAppointmentId));
-        };
+    const handleDelete = useCallback((payload: any) => {
+        const deletedAppointmentId = payload.old.id;
+        setAppointments(current => current.filter(app => app.id !== deletedAppointmentId));
+    }, []);
 
+    useEffect(() => {
+        // Primeiro, busca o estado inicial dos agendamentos.
+        fetchAppointments();
+
+        // Em seguida, se inscreve para receber atualizações em tempo real.
         const appointmentsChannel = supabase
             .channel('public-appointments')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleInsert)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleUpdate)
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleDelete)
             .subscribe((status, err) => {
-                if (status === 'SUBSCRIBED') {
-                    // Fetch initial data once the subscription is active to prevent race conditions.
-                    fetchAppointments();
-                }
                 if (status === 'CHANNEL_ERROR' && err) {
                     console.error('Realtime subscription error:', err);
                     setError('Falha na conexão em tempo real. Tente recarregar a página.');
                 }
             });
 
+        // Limpa a subscrição quando o componente é desmontado.
         return () => {
             supabase.removeChannel(appointmentsChannel);
         };
-    }, [user.id, fetchAppointments]);
+    }, [user.id, fetchAppointments, handleInsert, handleUpdate, handleDelete]);
 
     const filteredAppointments = useMemo(() => {
         return appointments
