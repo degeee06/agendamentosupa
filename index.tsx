@@ -77,6 +77,7 @@ const AlertCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12"
 const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></Icon>;
 const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
 const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
+const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
 
 // --- Componentes de UI ---
 const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
@@ -817,16 +818,23 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
           <header className="glassmorphism p-6 border-b border-gray-800/50 flex justify-between items-center">
              <h2 className="text-3xl font-bold text-white">Seus Agendamentos</h2>
              <div className="flex items-center space-x-4">
-                <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3">
-                    <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
-                    <a
-                        href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
-                        onClick={(e) => e.preventDefault()}
-                        className="hotmart-fb hotmart__button-checkout"
-                    >
-                        UPGRADE
-                    </a>
-                </div>
+                {profile?.plan === 'premium' ? (
+                    <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-2 bg-green-500/20 border border-green-400/30">
+                        <StarIcon className="w-5 h-5 text-yellow-400" />
+                        <span className="font-bold text-white">Plano Premium</span>
+                    </div>
+                ) : (
+                    <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3">
+                        <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
+                        <a
+                            href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
+                            onClick={(e) => e.preventDefault()}
+                            className="hotmart-fb hotmart__button-checkout"
+                        >
+                            UPGRADE
+                        </a>
+                    </div>
+                )}
                 <div 
                   onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
                   className="inline-block"
@@ -922,8 +930,8 @@ const App = () => {
                   console.error("Erro ao buscar perfil:", error);
               } else if (userProfile) {
                   const today = new Date().toISOString().split('T')[0];
-                  if (userProfile.last_usage_date !== today) {
-                      // Reset usage if it's a new day
+                  if (userProfile.last_usage_date !== today && userProfile.plan === 'trial') {
+                      // Reset usage if it's a new day for trial users
                       const { data: updatedProfile, error: updateError } = await supabase
                           .from('profiles')
                           .update({ daily_usage: 0, last_usage_date: today })
