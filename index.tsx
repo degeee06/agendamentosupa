@@ -88,9 +88,16 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; }) => {
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }) => {
     return (
-      <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400">
+      <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
+        <button 
+            onClick={() => onDelete(appointment.id)}
+            className="absolute top-3 right-3 text-gray-500 hover:text-red-400 transition-colors z-10 p-1"
+            aria-label="Excluir agendamento permanentemente"
+        >
+            <XIcon className="w-5 h-5" />
+        </button>
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-lg font-bold text-white">{appointment.name}</h3>
@@ -628,6 +635,23 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
     };
 
+    const handleDeleteAppointment = async (id: string) => {
+        const isConfirmed = window.confirm('Tem certeza que deseja excluir este agendamento? Esta ação é permanente e não pode ser desfeita.');
+        if (isConfirmed) {
+            const { error } = await supabase
+                .from('appointments')
+                .delete()
+                .eq('id', id);
+    
+            if (error) {
+                console.error("Erro ao excluir agendamento:", error);
+                // Você pode adicionar um alerta para o usuário aqui, se desejar
+            } else {
+                setAppointments(prev => prev.filter(app => app.id !== id));
+            }
+        }
+    };
+
 
     return (
       <div className="flex h-screen bg-black">
@@ -733,7 +757,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 </div>
              ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredAppointments.map(app => <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus}/>)}
+                    {filteredAppointments.map(app => <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteAppointment}/>)}
                 </div>
              )}
           </div>
