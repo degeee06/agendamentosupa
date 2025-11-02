@@ -11,7 +11,8 @@ type Appointment = {
   id: string;
   created_at: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
   date: string;
   time: string;
   status: 'Pendente' | 'Confirmado' | 'Cancelado';
@@ -72,6 +73,7 @@ const SearchIcon = (props: any) => <Icon {...props}><circle cx="11" cy="11" r="8
 const PlusIcon = (props: any) => <Icon {...props}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
 const UserIcon = (props: any) => <Icon {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></Icon>;
 const MailIcon = (props: any) => <Icon {...props}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></Icon>;
+const PhoneIcon = (props: any) => <Icon {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></Icon>;
 const LinkIcon = (props: any) => <Icon {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></Icon>;
 const LogOutIcon = (props: any) => <Icon {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></Icon>;
 const CopyIcon = (props: any) => <Icon {...props}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></Icon>;
@@ -108,7 +110,8 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-lg font-bold text-white">{appointment.name}</h3>
-            <p className="text-sm text-gray-400">{appointment.email}</p>
+            {appointment.phone && <p className="text-sm text-gray-400">{appointment.phone}</p>}
+            {appointment.email && <p className="text-xs text-gray-500">{appointment.email}</p>}
           </div>
           <StatusBadge status={appointment.status} />
         </div>
@@ -171,9 +174,10 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
     );
 };
 
-const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
+const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -181,9 +185,9 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-        await onSave(name, email, date, time);
+        await onSave(name, phone, email, date, time);
         setIsSaving(false);
-        setName(''); setEmail(''); setDate(''); setTime('');
+        setName(''); setEmail(''); setPhone(''); setDate(''); setTime('');
         onClose();
     };
 
@@ -191,7 +195,8 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
         <Modal isOpen={isOpen} onClose={onClose} title="Novo Agendamento">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                <input type="email" placeholder="Email do Cliente" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="tel" placeholder="Telefone do Cliente" value={phone} onChange={e => setPhone(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="email" placeholder="Email do Cliente (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <button type="submit" disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
@@ -441,6 +446,7 @@ const UpgradeModal = ({ isOpen, onClose, limit }: { isOpen: boolean, onClose: ()
 const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     
@@ -560,10 +566,10 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const dateString = selectedDate.toISOString().split('T')[0];
 
         const { data: existingAppointment } = await supabase
-            .from('appointments').select('id').eq('user_id', adminId).eq('email', email).in('status', ['Pendente', 'Confirmado']).limit(1);
+            .from('appointments').select('id').eq('user_id', adminId).eq('phone', phone).in('status', ['Pendente', 'Confirmado']).limit(1);
 
         if (existingAppointment && existingAppointment.length > 0) {
-            setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este profissional.' });
+            setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este número de telefone.' });
             setIsSaving(false);
             return;
         }
@@ -575,7 +581,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         }
 
         const { error } = await supabase.from('appointments').insert({
-            name, email, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
+            name, email, phone, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
         });
 
         if (error) {
@@ -588,7 +594,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             }
             setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
             setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
-            setName(''); setEmail(''); setSelectedDate(null); setSelectedTime(null);
+            setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
         }
         setIsSaving(false);
     };
@@ -667,7 +673,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        <input type="email" placeholder="Seu Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        <input type="tel" placeholder="Seu Telefone" value={phone} onChange={e => setPhone(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                        <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
                         
                         <Calendar />
 
@@ -693,7 +700,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                             </div>
                         )}
 
-                        <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !email} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                         </button>
                     </form>
@@ -797,11 +804,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             .filter(app => statusFilter === 'Todos' || app.status === statusFilter)
             .filter(app =>
                 app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                app.email.toLowerCase().includes(searchTerm.toLowerCase())
+                (app.email && app.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (app.phone && app.phone.toLowerCase().includes(searchTerm.toLowerCase()))
             );
     }, [appointments, statusFilter, searchTerm]);
 
-    const handleSaveAppointment = async (name: string, email: string, date: string, time: string) => {
+    const handleSaveAppointment = async (name: string, phone: string, email: string, date: string, time: string) => {
         if (!profile) return;
         
         if (hasReachedLimit) {
@@ -811,7 +819,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         const { data, error } = await supabase
             .from('appointments')
-            .insert({ name, email, date, time, user_id: user.id })
+            .insert({ name, phone, email, date, time, user_id: user.id })
             .select()
             .single();
 
