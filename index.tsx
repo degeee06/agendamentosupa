@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -111,6 +112,7 @@ const ChevronRightIcon = (props: any) => <Icon {...props}><polyline points="9 18
 const DownloadIcon = (props: any) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></Icon>;
 const BotIcon = (props: any) => <Icon {...props}><path d="M12 8V4H8" /><rect x="4" y="12" width="16" height="8" rx="2" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="M12 12v-2" /></Icon>;
 const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></Icon>;
+const SparklesIcon = (props: any) => <Icon {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></Icon>;
 
 
 // --- Componentes de UI ---
@@ -1264,7 +1266,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     aria-label="Abrir Assistente IA"
                     title="Abrir Assistente IA"
                 >
-                    <BotIcon className="w-5 h-5" />
+                    <SparklesIcon className="w-5 h-5" />
                 </button>
                 <div 
                   onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
