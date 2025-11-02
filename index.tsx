@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -379,7 +378,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
     const fetchAppointments = useCallback(async () => {
-        setIsLoading(true);
         const { data, error } = await supabase
             .from('appointments')
             .select('*')
@@ -399,35 +397,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     useEffect(() => {
         fetchAppointments();
 
-        const handleInsert = (payload: any) => {
-            const newAppointment = payload.new as Appointment;
-            setAppointments(current => {
-                const newAppointments = [newAppointment, ...current.filter(a => a.id !== newAppointment.id)];
-                newAppointments.sort((a, b) => {
-                    if (a.date !== b.date) {
-                        return new Date(b.date).getTime() - new Date(a.date).getTime();
-                    }
-                    return b.time.localeCompare(a.time);
-                });
-                return newAppointments;
-            });
-        };
-
-        const handleUpdate = (payload: any) => {
-            const updatedAppointment = payload.new as Appointment;
-            setAppointments(current => current.map(app => app.id === updatedAppointment.id ? updatedAppointment : app));
-        };
-
-        const handleDelete = (payload: any) => {
-            const deletedAppointmentId = payload.old.id;
-            setAppointments(current => current.filter(app => app.id !== deletedAppointmentId));
-        };
-
         const appointmentsChannel = supabase
-            .channel(`public:appointments:${user.id}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleInsert)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleUpdate)
-            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleDelete)
+            .channel('public:appointments')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` },
+                (payload) => {
+                    // Re-fetch appointments to get the latest sorted data and reflect changes instantly.
+                    fetchAppointments();
+                }
+            )
             .subscribe();
 
         return () => {
@@ -459,7 +438,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                  return false;
             }
         } else if (data) {
-            // No need to manually update state, Supabase Realtime will handle it
+            // No need to manually update state, Supabase Realtime will trigger a re-fetch
             const today = new Date().toISOString().split('T')[0];
             const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
             const { data: updatedProfile, error: profileError } = await supabase
@@ -484,7 +463,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         if (error) {
             console.error("Erro ao atualizar status:", error);
         }
-        // No need to manually update state, Supabase Realtime will handle it
+        // No need to manually update state, Supabase Realtime will trigger a re-fetch
     };
 
     const openDeleteModal = (id: string) => {
@@ -503,7 +482,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         if (error) {
             console.error("Erro ao excluir agendamento:", error);
         }
-        // No need to manually update state, Supabase Realtime will handle it
+        // No need to manually update state, Supabase Realtime will trigger a re-fetch
 
         setIsDeleteModalOpen(false);
         setAppointmentToDelete(null);
@@ -717,4 +696,30 @@ const App = () => {
                      <LoaderIcon className="w-16 h-16 text-white" />
                  </div>
              );
-        
+        }
+        if(!user && !isLoading) {
+             return <LoginPage />;
+        }
+        return null; 
+    }, [path, user, profile, isLoading]);
+
+    if (isLoading) {
+        return (
+             <div className="min-h-screen bg-black flex justify-center items-center">
+                 <LoaderIcon className="w-16 h-16 text-white"/>
+             </div>
+        );
+    }
+    
+    return pageContent;
+};
+
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
