@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -145,6 +146,7 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
 
 // FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => unknown, title: string, children: React.ReactNode }): React.ReactElement | null => {
+    if (!isOpen) return null;
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
             <div className="text-gray-300 mb-6">
@@ -402,8 +404,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     }, [user.id]);
 
     useEffect(() => {
-        fetchAppointments();
-
         const handleInsert = (payload: any) => {
             const newAppointment = payload.new as Appointment;
             setAppointments(current => {
@@ -434,6 +434,10 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleUpdate)
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleDelete)
             .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    // Fetch initial data once the subscription is active to prevent race conditions.
+                    fetchAppointments();
+                }
                 if (status === 'CHANNEL_ERROR' && err) {
                     console.error('Realtime subscription error:', err);
                     setError('Falha na conexão em tempo real. Tente recarregar a página.');
