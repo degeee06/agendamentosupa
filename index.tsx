@@ -142,14 +142,19 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
 };
 
 const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, size?: 'md' | 'lg' }) => {
-    if (!isOpen) return null;
     const sizeClasses = {
         md: 'max-w-md',
         lg: 'max-w-lg'
     };
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative`} onClick={(e) => e.stopPropagation()}>
+        <div 
+            className={`fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity duration-300 ease-in-out ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+            onClick={onClose}
+        >
+            <div 
+                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
+                onClick={(e) => e.stopPropagation()}
+            >
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
                     <XIcon className="w-6 h-6" />
                 </button>
@@ -632,6 +637,29 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const usage = profile?.daily_usage ?? 0;
     const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
+    useEffect(() => {
+        // Inject Hotmart script dynamically to ensure it runs after React mounts
+        const scriptId = 'hotmart-script';
+        const linkId = 'hotmart-css';
+    
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script'); 
+            script.id = scriptId;
+            script.src = 'https://static.hotmart.com/checkout/widget.min.js'; 
+            script.async = true;
+            document.head.appendChild(script); 
+        }
+    
+        if (!document.getElementById(linkId)) {
+            const link = document.createElement('link');
+            link.id = linkId;
+            link.rel = 'stylesheet'; 
+            link.type = 'text/css'; 
+            link.href = 'https://static.hotmart.com/css/hotmart-fb.min.css'; 
+            document.head.appendChild(link);
+        }
+    }, []);
+
     const fetchAppointments = useCallback(async () => {
         const { data, error } = await supabase
             .from('appointments')
@@ -878,29 +906,6 @@ const App = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [path, setPath] = useState(window.location.pathname);
     
-    useEffect(() => {
-        // Inject Hotmart script dynamically to ensure it runs after React mounts
-        const scriptId = 'hotmart-script';
-        const linkId = 'hotmart-css';
-    
-        if (!document.getElementById(scriptId)) {
-            const script = document.createElement('script'); 
-            script.id = scriptId;
-            script.src = 'https://static.hotmart.com/checkout/widget.min.js'; 
-            script.async = true;
-            document.head.appendChild(script); 
-        }
-    
-        if (!document.getElementById(linkId)) {
-            const link = document.createElement('link');
-            link.id = linkId;
-            link.rel = 'stylesheet'; 
-            link.type = 'text/css'; 
-            link.href = 'https://static.hotmart.com/css/hotmart-fb.min.css'; 
-            document.head.appendChild(link);
-        }
-    }, []);
-
     useEffect(() => {
       const checkUser = async () => {
           const { data: { session } } = await supabase.auth.getSession();
