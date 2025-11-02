@@ -1073,7 +1073,10 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
             const { data, error } = await supabase.functions.invoke('deepseek-assistant', {
                 body: {
-                  messages: currentMessages.map(m => ({ role: m.sender, content: m.text })),
+                  messages: currentMessages.map(m => ({
+                    role: m.sender === 'ai' ? 'assistant' : m.sender,
+                    content: m.text
+                  })),
                   context,
                 },
             });
