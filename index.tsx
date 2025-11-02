@@ -400,9 +400,9 @@ const UpgradeModal = ({ isOpen, onClose, limit }: { isOpen: boolean, onClose: ()
                 <a 
                     onClick={(e) => e.preventDefault()}
                     href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
-                    className="hotmart-fb hotmart__button-checkout w-full block bg-yellow-500 text-black font-bold py-3 px-4 rounded-lg hover:bg-yellow-400 transition-colors text-center"
+                    className="hotmart-fb hotmart__button-checkout w-full"
                 >
-                    Fazer Upgrade Agora
+                    🚀 Fazer Upgrade Ilimitado
                 </a>
             </div>
         </Modal>
@@ -822,7 +822,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     <a
                         href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
                         onClick={(e) => e.preventDefault()}
-                        className="hotmart-fb hotmart__button-checkout bg-yellow-500/20 text-yellow-300 text-xs font-bold px-3 py-1 rounded-md hover:bg-yellow-500/40 transition-colors"
+                        className="hotmart-fb hotmart__button-checkout"
                     >
                         UPGRADE
                     </a>
