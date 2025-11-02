@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -36,7 +37,7 @@ const Icon = ({ children, className = '' }: { children: React.ReactNode; classNa
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
-    viewBox="0 0 24"
+    viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
@@ -73,8 +74,7 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving issues with special props like `key`.
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => unknown; onDelete: (id: string) => void; }): React.ReactElement => {
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => unknown; onDelete: (id: string) => void; }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button
@@ -126,8 +126,7 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
     );
 };
 
-// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors related to the `children` prop.
-const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }): React.ReactElement | null => {
+const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={onClose}>
@@ -142,9 +141,7 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
     );
 };
 
-// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => unknown, title: string, children: React.ReactNode }): React.ReactElement | null => {
-    if (!isOpen) return null;
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { isOpen: boolean, onClose: () => void, onConfirm: () => unknown, title: string, children: React.ReactNode }) => {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
             <div className="text-gray-300 mb-6">
@@ -163,8 +160,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }: { is
 };
 
 
-// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
-const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<boolean>, user: User }): React.ReactElement | null => {
+const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, email: string, date: string, time: string) => Promise<boolean>, user: User }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [date, setDate] = useState('');
@@ -208,8 +204,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     );
 };
 
-// FIX: Added an explicit return type to help TypeScript correctly identify this as a React component, resolving type inference errors.
-const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }): React.ReactElement | null => {
+const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) => {
     const link = `${window.location.origin}/book/${userId}`;
     const [copied, setCopied] = useState(false);
 
@@ -401,52 +396,44 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         setIsLoading(false);
     }, [user.id]);
 
-    const handleInsert = useCallback((payload: any) => {
-        const newAppointment = payload.new as Appointment;
-        setAppointments(current => {
-            const newAppointments = [newAppointment, ...current.filter(a => a.id !== newAppointment.id)];
-            newAppointments.sort((a, b) => {
-                if (a.date !== b.date) {
-                    return new Date(b.date).getTime() - new Date(a.date).getTime();
-                }
-                return b.time.localeCompare(a.time);
-            });
-            return newAppointments;
-        });
-    }, []);
-
-    const handleUpdate = useCallback((payload: any) => {
-        const updatedAppointment = payload.new as Appointment;
-        setAppointments(current => current.map(app => app.id === updatedAppointment.id ? updatedAppointment : app));
-    }, []);
-
-    const handleDelete = useCallback((payload: any) => {
-        const deletedAppointmentId = payload.old.id;
-        setAppointments(current => current.filter(app => app.id !== deletedAppointmentId));
-    }, []);
-
     useEffect(() => {
-        // Primeiro, busca o estado inicial dos agendamentos.
         fetchAppointments();
 
-        // Em seguida, se inscreve para receber atualizações em tempo real.
+        const handleInsert = (payload: any) => {
+            const newAppointment = payload.new as Appointment;
+            setAppointments(current => {
+                const newAppointments = [newAppointment, ...current.filter(a => a.id !== newAppointment.id)];
+                newAppointments.sort((a, b) => {
+                    if (a.date !== b.date) {
+                        return new Date(b.date).getTime() - new Date(a.date).getTime();
+                    }
+                    return b.time.localeCompare(a.time);
+                });
+                return newAppointments;
+            });
+        };
+
+        const handleUpdate = (payload: any) => {
+            const updatedAppointment = payload.new as Appointment;
+            setAppointments(current => current.map(app => app.id === updatedAppointment.id ? updatedAppointment : app));
+        };
+
+        const handleDelete = (payload: any) => {
+            const deletedAppointmentId = payload.old.id;
+            setAppointments(current => current.filter(app => app.id !== deletedAppointmentId));
+        };
+
         const appointmentsChannel = supabase
-            .channel('public-appointments')
+            .channel(`public:appointments:${user.id}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleInsert)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleUpdate)
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` }, handleDelete)
-            .subscribe((status, err) => {
-                if (status === 'CHANNEL_ERROR' && err) {
-                    console.error('Realtime subscription error:', err);
-                    setError('Falha na conexão em tempo real. Tente recarregar a página.');
-                }
-            });
+            .subscribe();
 
-        // Limpa a subscrição quando o componente é desmontado.
         return () => {
             supabase.removeChannel(appointmentsChannel);
         };
-    }, [user.id, fetchAppointments, handleInsert, handleUpdate, handleDelete]);
+    }, [user.id, fetchAppointments]);
 
     const filteredAppointments = useMemo(() => {
         return appointments
@@ -730,30 +717,4 @@ const App = () => {
                      <LoaderIcon className="w-16 h-16 text-white" />
                  </div>
              );
-        }
-        if(!user && !isLoading) {
-             return <LoginPage />;
-        }
-        return null; 
-    }, [path, user, profile, isLoading]);
-
-    if (isLoading) {
-        return (
-             <div className="min-h-screen bg-black flex justify-center items-center">
-                 <LoaderIcon className="w-16 h-16 text-white"/>
-             </div>
-        );
-    }
-    
-    return pageContent;
-};
-
-const container = document.getElementById('root');
-if (container) {
-  const root = createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-}
+        
