@@ -12,7 +12,6 @@ declare let jspdf: any;
 const SUPABASE_URL = 'https://ehosmvbealefukkbqggp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVob3NtdmJlYWxlZnVra2JxZ2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjIzMDgsImV4cCI6MjA3NzU5ODMwOH0.IKqwxawiPnZT__Djj6ISgnQOawKnbboJ1TfqhSTf89M';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const PRODUCTION_URL = 'https://oubook.vercel.app';
 
 // Tipos
 type Appointment = {
@@ -249,7 +248,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
 };
 
 const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) => {
-    const link = `${PRODUCTION_URL}/book/${userId}`;
+    const link = `${window.location.origin}/book/${userId}`;
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
