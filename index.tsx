@@ -2,6 +2,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+
 
 declare let jspdf: any;
 
@@ -113,6 +117,7 @@ const DownloadIcon = (props: any) => <Icon {...props}><path d="M21 15v4a2 2 0 0 
 const BotIcon = (props: any) => <Icon {...props}><path d="M12 8V4H8" /><rect x="4" y="12" width="16" height="8" rx="2" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="M12 12v-2" /></Icon>;
 const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></Icon>;
 const ChatBubbleIcon = (props: any) => <Icon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></Icon>;
+const MenuIcon = (props: any) => <Icon {...props}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></Icon>;
 
 
 // --- Componentes de UI ---
@@ -810,8 +815,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     return (
         <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
             <div className="w-full max-w-md mx-auto">
-                <div className="glassmorphism rounded-2xl p-8">
-                    <h1 className="text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
+                <div className="glassmorphism rounded-2xl p-6 sm:p-8">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
                     <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
 
                     {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
@@ -873,13 +878,42 @@ const LoginPage = () => {
             alert("Você precisa aceitar os Termos de Uso para continuar.");
             return;
         }
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin,
-            },
-        });
-        if (error) console.error("Erro no login:", error);
+    
+        const getRedirectUrl = () => {
+            const isNative = Capacitor.isNativePlatform();
+            return isNative ? 'com.oubook.app://auth-callback' : window.location.origin;
+        };
+    
+        try {
+            const isNative = Capacitor.isNativePlatform();
+            const redirectTo = getRedirectUrl();
+    
+            if (isNative) {
+                // For native, we get the URL and open it in the Capacitor Browser
+                const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo,
+                        skipBrowserRedirect: true, // Important for native flow
+                    },
+                });
+                if (error) throw error;
+                if (data.url) {
+                    await Browser.open({ url: data.url, windowName: '_self' });
+                }
+            } else {
+                // For web, Supabase handles the redirect automatically
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo,
+                    },
+                });
+                if (error) throw error;
+            }
+        } catch (error) {
+            console.error("Erro no login com Google:", error);
+        }
     };
 
     return (
@@ -887,8 +921,8 @@ const LoginPage = () => {
             <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
                 <div className="text-center w-full max-w-sm">
                      <CalendarIcon className="w-16 h-16 text-white mx-auto mb-4" />
-                     <h1 className="text-5xl font-bold text-white mb-2">Oubook</h1>
-                     <p className="text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
+                     <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">Oubook</h1>
+                     <p className="text-base sm:text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
                      
                      <div className="my-6">
                         {hasAcceptedPreviously ? (
@@ -934,6 +968,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
     const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
@@ -1181,9 +1216,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
 
     return (
-      <div className="flex h-screen bg-black">
+      <div className="flex h-screen bg-black overflow-hidden">
+        {/* Mobile Menu Overlay */}
+        {isMobileMenuOpen && (
+            <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+        )}
         {/* Sidebar */}
-        <aside className="w-64 glassmorphism p-6 flex-col hidden md:flex">
+        <aside className={`fixed md:relative h-full w-64 glassmorphism p-6 flex flex-col z-40 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden absolute top-4 right-4 text-gray-400 hover:text-white z-50">
+                <XIcon className="w-6 h-6" />
+            </button>
             <div className="flex items-center space-x-2 mb-10">
                 <CalendarIcon className="w-8 h-8 text-white"/>
                 <h1 className="text-2xl font-bold text-white">Oubook</h1>
@@ -1231,10 +1273,15 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col h-screen">
-          <header className="glassmorphism p-6 border-b border-gray-800/50 flex justify-between items-center">
-             <h2 className="text-3xl font-bold text-white">Seus Agendamentos</h2>
-             <div className="flex items-center space-x-4">
+        <main className="flex-1 flex flex-col h-screen overflow-y-auto scrollbar-hide">
+          <header className="glassmorphism p-4 sm:p-6 border-b border-gray-800/50 flex flex-wrap justify-between items-center gap-4 sticky top-0 z-20">
+             <div className="flex items-center gap-2">
+                <button onClick={() => setIsMobileMenuOpen(true)} className="p-1 md:hidden text-gray-300">
+                    <MenuIcon className="w-6 h-6" />
+                </button>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white">Seus Agendamentos</h2>
+             </div>
+             <div className="flex flex-wrap items-center justify-center gap-2">
                 {profile?.plan === 'premium' ? (
                     <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-2 bg-green-500/20 border border-green-400/30">
                         <StarIcon className="w-5 h-5 text-yellow-400" />
@@ -1279,17 +1326,17 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         className="bg-white text-black font-bold py-2 px-5 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <PlusIcon className="w-5 h-5"/>
-                        <span>Novo Agendamento</span>
+                        <span className="hidden sm:inline">Novo Agendamento</span>
                     </button>
                 </div>
              </div>
           </header>
 
-          <div className="p-6 flex-1 overflow-y-auto scrollbar-hide">
+          <div className="p-4 sm:p-6 flex-1">
              {/* Filtros e Busca */}
              <div className="mb-6">
-                <div className="flex justify-between items-center">
-                    <div className="flex space-x-1 glassmorphism p-1 rounded-lg">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex flex-wrap justify-center gap-1 glassmorphism p-1 rounded-lg">
                         {(['Todos', 'Pendente', 'Confirmado', 'Cancelado'] as const).map(status => (
                             <button
                                 key={status}
@@ -1300,7 +1347,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                             </button>
                         ))}
                     </div>
-                     <div className="relative w-full max-w-xs">
+                     <div className="relative w-full md:max-w-xs">
                          <input
                              type="text"
                              placeholder="Buscar por nome ou email..."
@@ -1348,6 +1395,45 @@ const App = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [path, setPath] = useState(window.location.pathname);
     
+    useEffect(() => {
+        // Handle native OAuth callback
+        CapacitorApp.addListener('appUrlOpen', async (event) => {
+            const url = new URL(event.url);
+            
+            // Check if it's the correct callback URL
+            if (`${url.protocol}//${url.hostname}` !== 'com.oubook.app://auth-callback') {
+                return;
+            }
+
+            const hash = url.hash.substring(1); // Remove '#'
+            const params = new URLSearchParams(hash);
+
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+
+            if (accessToken && refreshToken) {
+                const { error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                });
+
+                if (error) {
+                    console.error('Erro ao definir a sessão do Supabase:', error);
+                }
+                
+                // Always close the browser after attempting to set session
+                await Browser.close();
+                // onAuthStateChange will handle the UI update
+            } else {
+                 await Browser.close();
+            }
+        });
+        
+        Browser.addListener('browserFinished', () => {
+            console.log('Browser fechado pelo usuário.');
+        });
+    }, []);
+
     useEffect(() => {
         const checkUser = async () => {
             const { data: { session } } = await supabase.auth.getSession();
