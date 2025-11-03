@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+import { PushNotifications, Token } from '@capacitor/push-notifications';
 
 
 declare let jspdf: any;
@@ -131,7 +132,8 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }) => {
+// Fix: Changed component definition to be of type `React.FC` to correctly handle React-specific props like `key`.
+const AppointmentCard: React.FC<{ appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }> = ({ appointment, onUpdateStatus, onDelete }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button 
@@ -184,7 +186,8 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
     );
 };
 
-const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
+// Fix: Made `children` prop optional to fix TypeScript error.
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children?: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
     const sizeClasses = {
         md: 'max-w-md',
         lg: 'max-w-lg',
@@ -1045,6 +1048,63 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         const intervalId = setInterval(fetchDashboardData, 30000); // Polling
         return () => clearInterval(intervalId);
     }, [fetchDashboardData]);
+
+    useEffect(() => {
+        const registerForPushNotifications = async () => {
+            if (!Capacitor.isNativePlatform()) {
+                console.log("Push notifications are not available on the web.");
+                return;
+            }
+
+            try {
+                let permStatus = await PushNotifications.checkPermissions();
+                if (permStatus.receive === 'prompt') {
+                    permStatus = await PushNotifications.requestPermissions();
+                }
+
+                if (permStatus.receive !== 'granted') {
+                    console.error('User denied permissions for push notifications.');
+                    return;
+                }
+
+                await PushNotifications.register();
+
+                PushNotifications.addListener('registration', async (token: Token) => {
+                    console.log('Push registration success, token:', token.value);
+                    const { error } = await supabase
+                        .from('user_push_tokens')
+                        .upsert({ user_id: user.id, push_token: token.value }, { onConflict: 'push_token' });
+
+                    if (error) {
+                        console.error('Error saving push token:', error);
+                    } else {
+                        console.log('Push token saved successfully.');
+                    }
+                });
+
+                PushNotifications.addListener('registrationError', (err: any) => {
+                    console.error('Push registration error: ', err.error);
+                });
+
+                PushNotifications.addListener('pushNotificationReceived', notification => {
+                    console.log('Push notification received: ', notification);
+                });
+
+            } catch (e) {
+                console.error("An error occurred while setting up push notifications:", e);
+            }
+        };
+
+        if (user?.id) {
+            registerForPushNotifications();
+        }
+
+        return () => {
+            if (Capacitor.isNativePlatform()) {
+                PushNotifications.removeAllListeners().catch(err => console.error("Could not remove all listeners", err));
+            }
+        };
+    }, [user.id]);
 
     const filteredAppointments = useMemo(() => {
         return appointments

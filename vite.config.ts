@@ -10,10 +10,16 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
+      build: {
+        rollupOptions: {
+          external: [/^@capacitor\/.*/],
+        },
+      },
       define: {},
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
+          // Fix: `__dirname` is not available in ES modules. `path.resolve()` correctly points to the project root.
+          '@': path.resolve(),
         }
       }
     };
