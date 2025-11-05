@@ -738,7 +738,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         if (error) {
             setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
-            if (adminProfile) {
+            if (adminProfile && adminProfile.plan === 'trial') {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
@@ -1076,20 +1076,22 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             throw error;
         } else if (data) {
             setAppointments(prev => [data, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time)));
-            const today = new Date().toISOString().split('T')[0];
-            const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
-            const { data: updatedProfile, error: profileError } = await supabase
-                .from('profiles')
-                .update({ daily_usage: newUsage, last_usage_date: today })
-                .eq('id', user.id)
-                .select()
-                .single();
-            if (profileError) {
-                console.error("Erro ao atualizar perfil:", profileError);
-            } else if (updatedProfile) {
-                setProfile(updatedProfile);
-                if (updatedProfile.plan === 'trial' && updatedProfile.daily_usage >= TRIAL_LIMIT) {
-                    setIsUpgradeModalOpen(true);
+            if (profile.plan === 'trial') {
+                const today = new Date().toISOString().split('T')[0];
+                const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
+                const { data: updatedProfile, error: profileError } = await supabase
+                    .from('profiles')
+                    .update({ daily_usage: newUsage, last_usage_date: today })
+                    .eq('id', user.id)
+                    .select()
+                    .single();
+                if (profileError) {
+                    console.error("Erro ao atualizar perfil:", profileError);
+                } else if (updatedProfile) {
+                    setProfile(updatedProfile);
+                    if (updatedProfile.plan === 'trial' && updatedProfile.daily_usage >= TRIAL_LIMIT) {
+                        setIsUpgradeModalOpen(true);
+                    }
                 }
             }
         }
