@@ -32,6 +32,7 @@ type Profile = {
     daily_usage: number;
     last_usage_date: string;
     terms_accepted_at?: string;
+    premium_expires_at?: string;
 };
 
 type BusinessProfile = {
@@ -1438,41 +1439,78 @@ const App = () => {
         const checkUser = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             const currentUser = session?.user ?? null;
-
-            if (currentUser) {
-                const { data: userProfile, error } = await supabase
+    
+            if (!currentUser) {
+                setIsLoading(false);
+                return;
+            }
+    
+            // Step 1: Fetch profile
+            let { data: userProfile, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentUser.id)
+                .single();
+            
+            // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
+            if (error && error.code === 'PGRST116') { 
+                const { data: newProfile, error: insertError } = await supabase
                     .from('profiles')
-                    .select('*')
-                    .eq('id', currentUser.id)
+                    .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                    .select()
                     .single();
-
-                if (!userProfile) { // This is a new user
-                    const { data: newProfile, error: insertError } = await supabase
+    
+                if (insertError) {
+                    console.error("Erro ao criar perfil:", insertError);
+                    setIsLoading(false);
+                    return;
+                }
+                userProfile = newProfile;
+            } else if (error) {
+                console.error("Error fetching profile:", error);
+                setIsLoading(false);
+                return;
+            }
+    
+            // Step 3: Check for premium expiration
+            if (userProfile) {
+                const isPremium = userProfile.plan === 'premium';
+                const premiumExpired = isPremium && userProfile.premium_expires_at && new Date(userProfile.premium_expires_at) < new Date();
+    
+                if (premiumExpired) {
+                    const { data: revertedProfile, error: revertError } = await supabase
                         .from('profiles')
-                        .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                        .update({ plan: 'trial', premium_expires_at: null })
+                        .eq('id', currentUser.id)
                         .select()
                         .single();
-
-                    if (insertError) console.error("Erro ao criar perfil:", insertError);
-                    else setProfile(newProfile);
-                } else {
-                    const today = new Date().toISOString().split('T')[0];
-                    if (userProfile.last_usage_date !== today && userProfile.plan === 'trial') {
-                        // Reset usage if it's a new day for trial users
-                        const { data: updatedProfile, error: updateError } = await supabase
-                            .from('profiles')
-                            .update({ daily_usage: 0, last_usage_date: today })
-                            .eq('id', currentUser.id)
-                            .select()
-                            .single();
-                        if (updateError) console.error("Erro ao resetar uso:", updateError);
-                        else setProfile(updatedProfile);
-                    } else {
-                        setProfile(userProfile);
+                    
+                    if (revertError) {
+                        console.error("Error reverting expired plan:", revertError);
+                        userProfile.plan = 'trial'; 
+                    } else if (revertedProfile) {
+                        userProfile = revertedProfile;
                     }
                 }
-                setUser({id: currentUser.id, email: currentUser.email});
+    
+                // Step 4: Check for daily usage reset for trial users
+                const today = new Date().toISOString().split('T')[0];
+                if (userProfile.plan === 'trial' && userProfile.last_usage_date !== today) {
+                    const { data: updatedProfile, error: updateError } = await supabase
+                        .from('profiles')
+                        .update({ daily_usage: 0, last_usage_date: today })
+                        .eq('id', currentUser.id)
+                        .select()
+                        .single();
+                    if (!updateError && updatedProfile) {
+                        userProfile = updatedProfile;
+                    }
+                }
             }
+            
+            // Step 5: Set final state
+            setProfile(userProfile);
+            setUser({ id: currentUser.id, email: currentUser.email });
             setIsLoading(false);
         };
       
@@ -1491,15 +1529,13 @@ const App = () => {
             } else {
                 setUser(null);
                 setProfile(null);
-                // Optional: You could clear the flag on sign out if desired
-                // localStorage.removeItem('termsAccepted'); 
             }
         });
       
         return () => {
             authListener.subscription.unsubscribe();
         };
-    }, [profile]);
+    }, []);
 
     const router = useMemo(() => {
         const pathParts = path.split('/').filter(Boolean);
