@@ -612,10 +612,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const fetchAdminData = async () => {
             setIsLoading(true);
             try {
-                // Robust client-side check
-                const bookingKey = `hasBooked_${adminId}`;
+                // Robust client-side check based on phone number
                 const phoneKey = `bookedPhone_${adminId}`;
-                const hasBookedFlag = localStorage.getItem(bookingKey) === 'true';
                 const savedPhone = localStorage.getItem(phoneKey);
 
                 let phoneHasActiveBooking = false;
@@ -632,7 +630,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     }
                 }
                 
-                if (hasBookedFlag || phoneHasActiveBooking) {
+                if (phoneHasActiveBooking) {
                     setHasBookedFromDevice(true);
                     setIsLoading(false);
                     return; // Stop further execution, show the "already booked" message
@@ -772,10 +770,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
             }
 
-            // Marcar o dispositivo como usado (dupla camada)
-            const bookingKey = `hasBooked_${adminId}`;
+            // Marcar o dispositivo como usado
             const phoneKey = `bookedPhone_${adminId}`;
-            localStorage.setItem(bookingKey, 'true');
             localStorage.setItem(phoneKey, unmaskedPhone);
             setHasBookedFromDevice(true);
             
