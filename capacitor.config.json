@@ -1,0 +1,14 @@
+{
+  "appId": "com.arranchou.app",
+  "appName": "Arranchou",
+  "webDir": "dist",
+  "backgroundColor": "#111827",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

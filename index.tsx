@@ -604,7 +604,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     
     const [isLoading, setIsLoading] = useState(true);
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [hasBookedFromDevice, setHasBookedFromDevice] = useState(false);
+    const [bookingSuccess, setBookingSuccess] = useState(false);
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
@@ -612,33 +612,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const fetchAdminData = async () => {
             setIsLoading(true);
             try {
-                // Robust client-side check
-                const bookingKey = `hasBooked_${adminId}`;
-                const phoneKey = `bookedPhone_${adminId}`;
-                const hasBookedFlag = localStorage.getItem(bookingKey) === 'true';
-                const savedPhone = localStorage.getItem(phoneKey);
-
-                let phoneHasActiveBooking = false;
-                if (savedPhone) {
-                    const { data: existing } = await supabase
-                        .from('appointments')
-                        .select('id')
-                        .eq('user_id', adminId)
-                        .eq('phone', savedPhone)
-                        .in('status', ['Pendente', 'Confirmado'])
-                        .limit(1);
-                    if (existing && existing.length > 0) {
-                        phoneHasActiveBooking = true;
-                    }
-                }
-                
-                if (hasBookedFlag || phoneHasActiveBooking) {
-                    setHasBookedFromDevice(true);
-                    setIsLoading(false);
-                    return; // Stop further execution, show the "already booked" message
-                }
-
-                // Proceed with loading public data if no booking found
+                // Proceed with loading public data
                 const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
                     supabase.from('profiles').select('*').eq('id', adminId).single(),
                     supabase.from('business_profiles').select('*').eq('user_id', adminId).single(),
@@ -771,17 +745,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
             }
-
-            // Marcar o dispositivo como usado (dupla camada)
-            const bookingKey = `hasBooked_${adminId}`;
-            const phoneKey = `bookedPhone_${adminId}`;
-            localStorage.setItem(bookingKey, 'true');
-            localStorage.setItem(phoneKey, unmaskedPhone);
-            setHasBookedFromDevice(true);
             
-            setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
-            setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
-            setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
+            setBookingSuccess(true);
         }
         setIsSaving(false);
     };
@@ -853,11 +818,11 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
             <div className="w-full max-w-md mx-auto">
                 <div className="glassmorphism rounded-2xl p-6 sm:p-8">
-                    {hasBookedFromDevice ? (
+                    {bookingSuccess ? (
                         <div className="text-center">
                             <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4"/>
                             <h1 className="text-2xl font-bold text-white mb-2">Agendamento Realizado</h1>
-                            <p className="text-gray-400">Você já realizou um agendamento. Para marcar um novo horário, por favor, entre em contato diretamente com o profissional.</p>
+                            <p className="text-gray-400">Seu horário foi enviado para confirmação. Para realizar um novo agendamento, por favor, atualize a página. Para qualquer alteração, entre em contato diretamente com o profissional.</p>
                         </div>
                     ) : (
                         <>
@@ -895,7 +860,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                                     </div>
                                 )}
 
-                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone || hasBookedFromDevice} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                                 </button>
                             </form>
