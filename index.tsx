@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -620,7 +621,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 if (savedPhone) {
                     const { data: existing } = await supabase
                         .from('appointments')
-                        .select('id')
+                        .select('date')
                         .eq('user_id', adminId)
                         .eq('phone', savedPhone)
                         .in('status', ['Pendente', 'Confirmado'])
