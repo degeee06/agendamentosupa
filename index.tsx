@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -12,6 +11,7 @@ declare let jspdf: any;
 const SUPABASE_URL = 'https://ehosmvbealefukkbqggp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVob3NtdmJlYWxlZnVra2JxZ2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjIzMDgsImV4cCI6MjA3NzU5ODMwOH0.IKqwxawiPnZT__Djj6ISgnQOawKnbboJ1TfqhSTf89M';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const APP_URL = 'https://oubook.vercel.app'; // URL pública da sua aplicação
 
 // Tipos
 type Appointment = {
@@ -249,7 +249,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
 };
 
 const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) => {
-    const link = `${window.location.origin}/book/${userId}`;
+    const link = `${APP_URL}/book/${userId}`;
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
@@ -604,6 +604,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     
     const [isLoading, setIsLoading] = useState(true);
     const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [hasBookedFromDevice, setHasBookedFromDevice] = useState(false);
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
@@ -611,6 +612,33 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const fetchAdminData = async () => {
             setIsLoading(true);
             try {
+                // Robust client-side check
+                const bookingKey = `hasBooked_${adminId}`;
+                const phoneKey = `bookedPhone_${adminId}`;
+                const hasBookedFlag = localStorage.getItem(bookingKey) === 'true';
+                const savedPhone = localStorage.getItem(phoneKey);
+
+                let phoneHasActiveBooking = false;
+                if (savedPhone) {
+                    const { data: existing } = await supabase
+                        .from('appointments')
+                        .select('id')
+                        .eq('user_id', adminId)
+                        .eq('phone', savedPhone)
+                        .in('status', ['Pendente', 'Confirmado'])
+                        .limit(1);
+                    if (existing && existing.length > 0) {
+                        phoneHasActiveBooking = true;
+                    }
+                }
+                
+                if (hasBookedFlag || phoneHasActiveBooking) {
+                    setHasBookedFromDevice(true);
+                    setIsLoading(false);
+                    return; // Stop further execution, show the "already booked" message
+                }
+
+                // Proceed with loading public data if no booking found
                 const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
                     supabase.from('profiles').select('*').eq('id', adminId).single(),
                     supabase.from('business_profiles').select('*').eq('user_id', adminId).single(),
@@ -743,6 +771,14 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
             }
+
+            // Marcar o dispositivo como usado (dupla camada)
+            const bookingKey = `hasBooked_${adminId}`;
+            const phoneKey = `bookedPhone_${adminId}`;
+            localStorage.setItem(bookingKey, 'true');
+            localStorage.setItem(phoneKey, unmaskedPhone);
+            setHasBookedFromDevice(true);
+            
             setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
             setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
             setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
@@ -817,44 +853,54 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
             <div className="w-full max-w-md mx-auto">
                 <div className="glassmorphism rounded-2xl p-6 sm:p-8">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
-                    <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
+                    {hasBookedFromDevice ? (
+                        <div className="text-center">
+                            <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4"/>
+                            <h1 className="text-2xl font-bold text-white mb-2">Agendamento Realizado</h1>
+                            <p className="text-gray-400">Você já realizou um agendamento. Para marcar um novo horário, por favor, entre em contato diretamente com o profissional.</p>
+                        </div>
+                    ) : (
+                        <>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
+                            <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
 
-                    {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
+                            {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        <input type="tel" placeholder="Seu Telefone (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                        
-                        <Calendar />
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                <input type="tel" placeholder="Seu Telefone (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                
+                                <Calendar />
 
-                        {selectedDate && (
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
-                                {availableTimeSlots.length > 0 ? (
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                        {availableTimeSlots.map(time => (
-                                            <button 
-                                                key={time} 
-                                                type="button"
-                                                onClick={() => setSelectedTime(time)}
-                                                className={`p-2 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
-                                            >
-                                                {time}
-                                            </button>
-                                        ))}
+                                {selectedDate && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
+                                        {availableTimeSlots.length > 0 ? (
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                                {availableTimeSlots.map(time => (
+                                                    <button 
+                                                        key={time} 
+                                                        type="button"
+                                                        onClick={() => setSelectedTime(time)}
+                                                        className={`p-2 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
+                                        )}
                                     </div>
-                                ) : (
-                                    <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
                                 )}
-                            </div>
-                        )}
 
-                        <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
-                        </button>
-                    </form>
+                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone || hasBookedFromDevice} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
+                                </button>
+                            </form>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
@@ -882,7 +928,7 @@ const LoginPage = () => {
     
         const getRedirectUrl = () => {
             const isNative = Capacitor.isNativePlatform();
-            return isNative ? 'com.oubook.app://auth-callback' : window.location.origin;
+            return isNative ? 'com.oubook.app://auth-callback' : APP_URL;
         };
     
         try {
@@ -1009,7 +1055,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         setIsLoading(true);
         try {
             const [appointmentsRes, businessProfileRes] = await Promise.all([
-                supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('time', { ascending: false }),
+                supabase.from('appointments').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
                 supabase.from('business_profiles').select('*').eq('user_id', user.id).single()
             ]);
 
@@ -1049,6 +1095,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const filteredAppointments = useMemo(() => {
         return appointments
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
             .filter(app => statusFilter === 'Todos' || app.status === statusFilter)
             .filter(app =>
                 app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1075,7 +1122,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             console.error('Erro ao salvar:', error);
             throw error;
         } else if (data) {
-            setAppointments(prev => [data, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time)));
+            setAppointments(prev => [data, ...prev].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
             if (profile.plan === 'trial') {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
@@ -1399,42 +1446,42 @@ const App = () => {
     const [path, setPath] = useState(window.location.pathname);
     
     useEffect(() => {
-        // Handle native OAuth callback
-        CapacitorApp.addListener('appUrlOpen', async (event) => {
+        // Handle native OAuth callback & Universal Links
+        const listener = CapacitorApp.addListener('appUrlOpen', async (event) => {
             const url = new URL(event.url);
             
-            // Check if it's the correct callback URL
-            if (`${url.protocol}//${url.hostname}` !== 'com.oubook.app://auth-callback') {
+            // Rota de Auth (com.oubook.app://auth-callback)
+            if (url.protocol === 'com.oubook.app:') {
+                const hash = url.hash.substring(1); // Remove '#'
+                const params = new URLSearchParams(hash);
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
+
+                if (accessToken && refreshToken) {
+                    await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                    });
+                }
+                await Browser.close();
+                window.history.replaceState({}, '', '/');
+                setPath('/'); // Navega para o dashboard
                 return;
             }
 
-            const hash = url.hash.substring(1); // Remove '#'
-            const params = new URLSearchParams(hash);
-
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-
-            if (accessToken && refreshToken) {
-                const { error } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken,
-                });
-
-                if (error) {
-                    console.error('Erro ao definir a sessão do Supabase:', error);
-                }
-                
-                // Always close the browser after attempting to set session
-                await Browser.close();
-                // onAuthStateChange will handle the UI update
-            } else {
-                 await Browser.close();
+            // Rota de Deep Link (https://oubook.vercel.app/book/...)
+            if (url.hostname === new URL(APP_URL).hostname) {
+                setPath(url.pathname);
             }
         });
         
         Browser.addListener('browserFinished', () => {
             console.log('Browser fechado pelo usuário.');
         });
+        
+        return () => {
+          listener.remove();
+        };
     }, []);
 
     useEffect(() => {
