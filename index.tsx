@@ -35,14 +35,24 @@ type Profile = {
     premium_expires_at?: string;
 };
 
-type BusinessProfile = {
+// TIPO CORRIGIDO para corresponder ao schema do banco de dados `perfis_negocio`
+type BusinessProfileFromDB = {
     user_id: string;
+    horarios_funcionamento: { start: string; end: string };
+    dias_funcionamento: string[]; // e.g., ['monday', 'tuesday']
+    horarios_bloqueados: { dates?: string[]; times?: { [key: string]: string[] } };
+};
+
+// Tipo para o estado interno dos componentes, para manter a UI funcionando
+type BusinessProfileState = {
+    user_id: string;
+    start_time: string;
+    end_time: string;
+    working_days: { [key: string]: boolean }; // e.g., { monday: true, tuesday: true }
     blocked_dates: string[];
     blocked_times: { [key: string]: string[] };
-    working_days: { [key: string]: boolean };
-    start_time?: string;
-    end_time?: string;
-}
+};
+
 
 type User = {
     id: string;
@@ -185,7 +195,8 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
     );
 };
 
-const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
+// FIX: Made children prop optional to resolve incorrect TypeScript errors.
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children?: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
     const sizeClasses = {
         md: 'max-w-md',
         lg: 'max-w-lg',
@@ -273,75 +284,91 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
 };
 
 const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, onClose: () => void, userId: string }) => {
-    const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: {}, start_time: '09:00', end_time: '17:00' });
+    const [profile, setProfile] = useState<BusinessProfileState | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [newBlockedDate, setNewBlockedDate] = useState('');
     const [newBlockedTime, setNewBlockedTime] = useState('');
     const [selectedDay, setSelectedDay] = useState('monday');
 
-    const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
-    const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
-    const defaultStartTime = '09:00';
-    const defaultEndTime = '17:00';
+    const daysOfWeek = useMemo(() => ({ monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" }), []);
+
+    const transformDbToState = useCallback((data: BusinessProfileFromDB | null): BusinessProfileState => {
+        const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+        const workingDaysObj = data?.dias_funcionamento?.reduce((acc, day) => ({ ...acc, [day]: true }), {}) || {};
+        
+        return {
+            user_id: userId,
+            start_time: data?.horarios_funcionamento?.start || '09:00',
+            end_time: data?.horarios_funcionamento?.end || '17:00',
+            working_days: { ...defaultWorkingDays, ...workingDaysObj },
+            blocked_dates: data?.horarios_bloqueados?.dates || [],
+            blocked_times: data?.horarios_bloqueados?.times || {},
+        };
+    }, [userId]);
 
     useEffect(() => {
         if (isOpen) {
             const fetchProfile = async () => {
                 setIsLoading(true);
-                const { data, error } = await supabase.from('business_profiles').select('*').eq('user_id', userId).single();
-                if (data) {
-                    setProfile({
-                        ...data,
-                        blocked_dates: data.blocked_dates || [],
-                        blocked_times: data.blocked_times || {},
-                        working_days: data.working_days || defaultWorkingDays,
-                        start_time: data.start_time || defaultStartTime,
-                        end_time: data.end_time || defaultEndTime,
-                    });
-                } else {
-                    setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
+                const { data, error } = await supabase.from('perfis_negocio').select('*').eq('user_id', userId).single();
+                if (error && error.code !== 'PGRST116') {
+                    console.error("Erro ao buscar perfil de negócio:", error);
                 }
+                setProfile(transformDbToState(data));
                 setIsLoading(false);
             };
             fetchProfile();
         }
-    }, [isOpen, userId]);
+    }, [isOpen, userId, transformDbToState]);
 
     const handleSave = async () => {
+        if (!profile) return;
         setIsSaving(true);
-        const { error } = await supabase.from('business_profiles').upsert(profile, { onConflict: 'user_id' });
+        
+        // Transform state back to DB format
+        const dataToSave: BusinessProfileFromDB = {
+            user_id: userId,
+            horarios_funcionamento: { start: profile.start_time, end: profile.end_time },
+            dias_funcionamento: Object.entries(profile.working_days).filter(([, value]) => value).map(([key]) => key),
+            horarios_bloqueados: { dates: profile.blocked_dates, times: profile.blocked_times },
+        };
+
+        const { error } = await supabase.from('perfis_negocio').upsert(dataToSave, { onConflict: 'user_id' });
         if (error) {
             console.error("Erro ao salvar perfil de negócio:", error);
+            alert("Erro ao salvar. Por favor, tente novamente.");
         } else {
             onClose();
         }
         setIsSaving(false);
     };
+    
+    if (!profile) return null; // or a loader
 
     const handleWorkingDayChange = (day: string) => {
         setProfile(p => ({
-            ...p,
+            ...p!,
             working_days: {
-                ...p.working_days,
-                [day]: !p.working_days[day]
+                ...p!.working_days,
+                [day]: !p!.working_days[day]
             }
         }));
     };
     
     const handleTimeChange = (field: 'start_time' | 'end_time', value: string) => {
-        setProfile(p => ({ ...p, [field]: value }));
+        setProfile(p => ({ ...p!, [field]: value }));
     };
 
     const addBlockedDate = () => {
         if (newBlockedDate && !profile.blocked_dates.includes(newBlockedDate)) {
-            setProfile(p => ({ ...p, blocked_dates: [...p.blocked_dates, newBlockedDate].sort() }));
+            setProfile(p => ({ ...p!, blocked_dates: [...p!.blocked_dates, newBlockedDate].sort() }));
             setNewBlockedDate('');
         }
     };
     
     const removeBlockedDate = (dateToRemove: string) => {
-        setProfile(p => ({ ...p, blocked_dates: p.blocked_dates.filter(d => d !== dateToRemove) }));
+        setProfile(p => ({ ...p!, blocked_dates: p!.blocked_dates.filter(d => d !== dateToRemove) }));
     };
 
     const addBlockedTime = () => {
@@ -349,9 +376,9 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             const dayTimes = profile.blocked_times[selectedDay] || [];
             if (!dayTimes.includes(newBlockedTime)) {
                 setProfile(p => ({
-                    ...p,
+                    ...p!,
                     blocked_times: {
-                        ...p.blocked_times,
+                        ...p!.blocked_times,
                         [selectedDay]: [...dayTimes, newBlockedTime].sort()
                     }
                 }));
@@ -362,10 +389,10 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
 
     const removeBlockedTime = (day: string, timeToRemove: string) => {
         setProfile(p => ({
-            ...p,
+            ...p!,
             blocked_times: {
-                ...p.blocked_times,
-                [day]: (p.blocked_times[day] || []).filter(t => t !== timeToRemove)
+                ...p!.blocked_times,
+                [day]: (p!.blocked_times[day] || []).filter(t => t !== timeToRemove)
             }
         }));
     };
@@ -599,53 +626,43 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     
     const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
-    const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+    const [businessProfile, setBusinessProfile] = useState<BusinessProfileState | null>(null);
     const [appointments, setAppointments] = useState<{ date: string; time: string; }[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [hasBookedFromDevice, setHasBookedFromDevice] = useState(false);
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
+
+    const transformDbToState = useCallback((data: BusinessProfileFromDB | null): BusinessProfileState => {
+        const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+        const workingDaysObj = data?.dias_funcionamento?.reduce((acc, day) => ({ ...acc, [day]: true }), {}) || {};
+        
+        return {
+            user_id: adminId,
+            start_time: data?.horarios_funcionamento?.start || '09:00',
+            end_time: data?.horarios_funcionamento?.end || '17:00',
+            working_days: { ...defaultWorkingDays, ...workingDaysObj },
+            blocked_dates: data?.horarios_bloqueados?.dates || [],
+            blocked_times: data?.horarios_bloqueados?.times || {},
+        };
+    }, [adminId]);
 
     useEffect(() => {
         const fetchAdminData = async () => {
             setIsLoading(true);
             try {
-                // Robust client-side check
-                const bookingKey = `hasBooked_${adminId}`;
-                const phoneKey = `bookedPhone_${adminId}`;
-                const hasBookedFlag = localStorage.getItem(bookingKey) === 'true';
-                const savedPhone = localStorage.getItem(phoneKey);
-
-                let phoneHasActiveBooking = false;
-                if (savedPhone) {
-                    const { data: existing } = await supabase
-                        .from('appointments')
-                        .select('id')
-                        .eq('user_id', adminId)
-                        .eq('phone', savedPhone)
-                        .in('status', ['Pendente', 'Confirmado'])
-                        .limit(1);
-                    if (existing && existing.length > 0) {
-                        phoneHasActiveBooking = true;
-                    }
-                }
-                
-                if (hasBookedFlag || phoneHasActiveBooking) {
-                    setHasBookedFromDevice(true);
-                    setIsLoading(false);
-                    return; // Stop further execution, show the "already booked" message
-                }
-
-                // Proceed with loading public data if no booking found
+                // Proceed with loading public data
                 const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
                     supabase.from('profiles').select('*').eq('id', adminId).single(),
-                    supabase.from('business_profiles').select('*').eq('user_id', adminId).single(),
-                    supabase.from('appointments').select('date, time').eq('user_id', adminId).in('status', ['Pendente', 'Confirmado'])
+                    supabase.from('perfis_negocio').select('*').eq('user_id', adminId).single(),
+                    supabase.from('agendamentos').select('data, horario').eq('user_id', adminId).in('status', ['Pendente', 'Confirmado'])
                 ]);
 
-                if (profileRes.error) throw profileRes.error;
+                if (profileRes.error) {
+                    console.error("Erro ao buscar perfil do profissional:", profileRes.error);
+                    throw new Error("Não foi possível carregar o perfil do profissional.");
+                }
                 
                 const today = new Date().toISOString().split('T')[0];
                 if (profileRes.data.last_usage_date !== today) {
@@ -654,24 +671,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                     setAdminProfile(profileRes.data);
                 }
 
-                setAppointments(appointmentsRes.data || []);
-                
-                const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
-                const defaultStartTime = '09:00';
-                const defaultEndTime = '17:00';
-
-                if (businessProfileRes.data) {
-                    setBusinessProfile({
-                        ...businessProfileRes.data,
-                        blocked_dates: businessProfileRes.data.blocked_dates || [],
-                        blocked_times: businessProfileRes.data.blocked_times || {},
-                        working_days: businessProfileRes.data.working_days || defaultWorkingDays,
-                        start_time: businessProfileRes.data.start_time || defaultStartTime,
-                        end_time: businessProfileRes.data.end_time || defaultEndTime,
-                    });
-                } else {
-                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
-                }
+                setAppointments(appointmentsRes.data?.map(a => ({ date: a.data, time: a.horario.substring(0, 5) })) || []);
+                setBusinessProfile(transformDbToState(businessProfileRes.data));
 
             } catch (error) {
                 console.error('Erro ao buscar dados do admin:', error);
@@ -681,7 +682,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             }
         };
         fetchAdminData();
-    }, [adminId]);
+    }, [adminId, transformDbToState]);
 
     const isDayAvailable = useCallback((date: Date): boolean => {
         if (!businessProfile) return false;
@@ -745,7 +746,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const dateString = selectedDate.toISOString().split('T')[0];
 
         const { data: existingAppointment } = await supabase
-            .from('appointments').select('id').eq('user_id', adminId).eq('phone', unmaskedPhone).in('status', ['Pendente', 'Confirmado']).limit(1);
+            .from('agendamentos').select('id').eq('user_id', adminId).eq('telefone', unmaskedPhone).in('status', ['Pendente', 'Confirmado']).limit(1);
 
         if (existingAppointment && existingAppointment.length > 0) {
             setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este número de telefone.' });
@@ -759,8 +760,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             return;
         }
 
-        const { error } = await supabase.from('appointments').insert({
-            name, email, phone: unmaskedPhone, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
+        const { error } = await supabase.from('agendamentos').insert({
+            nome: name, email, telefone: unmaskedPhone, data: dateString, horario: selectedTime, user_id: adminId, status: 'Pendente'
         });
 
         if (error) {
@@ -772,14 +773,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
             }
 
-            // Marcar o dispositivo como usado (dupla camada)
-            const bookingKey = `hasBooked_${adminId}`;
-            const phoneKey = `bookedPhone_${adminId}`;
-            localStorage.setItem(bookingKey, 'true');
-            localStorage.setItem(phoneKey, unmaskedPhone);
-            setHasBookedFromDevice(true);
-            
-            setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
+            setMessage({ type: 'success', text: 'Seu horário foi confirmado! Você já pode fechar esta página.' });
             setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
             setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
         }
@@ -853,18 +847,18 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
             <div className="w-full max-w-md mx-auto">
                 <div className="glassmorphism rounded-2xl p-6 sm:p-8">
-                    {hasBookedFromDevice ? (
+                    {message && message.type === 'success' ? (
                         <div className="text-center">
                             <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4"/>
                             <h1 className="text-2xl font-bold text-white mb-2">Agendamento Realizado</h1>
-                            <p className="text-gray-400">Você já realizou um agendamento. Para marcar um novo horário, por favor, entre em contato diretamente com o profissional.</p>
+                            <p className="text-gray-400">{message.text}</p>
                         </div>
                     ) : (
                         <>
                             <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
                             <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
 
-                            {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
+                            {message && message.type === 'error' && <div className={`p-4 rounded-lg mb-4 text-center bg-red-500/20 text-red-300`}>{message.text}</div>}
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
@@ -895,7 +889,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                                     </div>
                                 )}
 
-                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone || hasBookedFromDevice} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
                                 </button>
                             </form>
@@ -1006,7 +1000,7 @@ const LoginPage = () => {
 
 const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile | null, setProfile: React.Dispatch<React.SetStateAction<Profile | null>>}) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+    const [businessProfile, setBusinessProfile] = useState<BusinessProfileState | null>(null);
     const [statusFilter, setStatusFilter] = useState<'Pendente' | 'Confirmado' | 'Cancelado' | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -1029,7 +1023,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
     useEffect(() => {
-        // Inject Hotmart script dynamically to ensure it runs after React mounts
         const scriptId = 'hotmart-script';
         const linkId = 'hotmart-css';
     
@@ -1055,28 +1048,37 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         setIsLoading(true);
         try {
             const [appointmentsRes, businessProfileRes] = await Promise.all([
-                supabase.from('appointments').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-                supabase.from('business_profiles').select('*').eq('user_id', user.id).single()
+                supabase.from('agendamentos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+                supabase.from('perfis_negocio').select('*').eq('user_id', user.id).single()
             ]);
 
             if (appointmentsRes.error) throw appointmentsRes.error;
-            setAppointments(appointmentsRes.data || []);
-            
-            const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
-            const defaultStartTime = '09:00';
-            const defaultEndTime = '17:00';
+            const formattedAppointments = appointmentsRes.data?.map(a => ({
+                ...a,
+                name: a.nome,
+                phone: a.telefone,
+                date: a.data,
+                time: a.horario.substring(0, 5),
+                status: a.status.charAt(0).toUpperCase() + a.status.slice(1)
+            })) || [];
+            // FIX: Removed 'as any' and used a proper type assertion to maintain type safety.
+            setAppointments(formattedAppointments as Appointment[]);
             
             if (businessProfileRes.data) {
+                const dbProfile = businessProfileRes.data;
+                const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+                const workingDaysObj = dbProfile.dias_funcionamento?.reduce((acc: any, day: string) => ({ ...acc, [day]: true }), {}) || {};
+        
                 setBusinessProfile({
-                    ...businessProfileRes.data,
-                    blocked_dates: businessProfileRes.data.blocked_dates || [],
-                    blocked_times: businessProfileRes.data.blocked_times || {},
-                    working_days: businessProfileRes.data.working_days || defaultWorkingDays,
-                    start_time: businessProfileRes.data.start_time || defaultStartTime,
-                    end_time: businessProfileRes.data.end_time || defaultEndTime,
+                    user_id: user.id,
+                    start_time: dbProfile.horarios_funcionamento?.start || '09:00',
+                    end_time: dbProfile.horarios_funcionamento?.end || '17:00',
+                    working_days: { ...defaultWorkingDays, ...workingDaysObj },
+                    blocked_dates: dbProfile.horarios_bloqueados?.dates || [],
+                    blocked_times: dbProfile.horarios_bloqueados?.times || {},
                 });
             } else {
-                 setBusinessProfile({ user_id: user.id, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
+                 setBusinessProfile({ user_id: user.id, blocked_dates: [], blocked_times: {}, working_days: { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false }, start_time: '09:00', end_time: '17:00' });
             }
 
         } catch (error: any) {
@@ -1113,8 +1115,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
 
         const { data, error } = await supabase
-            .from('appointments')
-            .insert({ name, phone, email, date, time, user_id: user.id })
+            .from('agendamentos')
+            .insert({ nome: name, telefone: phone, email, data: date, horario: time, user_id: user.id, status: 'pendente' })
             .select()
             .single();
 
@@ -1122,7 +1124,17 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             console.error('Erro ao salvar:', error);
             throw error;
         } else if (data) {
-            setAppointments(prev => [data, ...prev].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+             // FIX: Correctly typed the new appointment and removed 'as any' to ensure type safety.
+             const newAppointment = {
+                ...data,
+                name: data.nome,
+                phone: data.telefone,
+                date: data.data,
+                time: data.horario.substring(0, 5),
+                status: data.status.charAt(0).toUpperCase() + data.status.slice(1)
+            } as Appointment;
+            setAppointments(prev => [newAppointment, ...prev].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+
             if (profile.plan === 'trial') {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
@@ -1197,8 +1209,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
         const { data, error } = await supabase
-            .from('appointments')
-            .update({ status })
+            .from('agendamentos')
+            .update({ status: status.toLowerCase() })
             .eq('id', id)
             .select()
             .single();
@@ -1206,7 +1218,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         if (error) {
             console.error("Erro ao atualizar status:", error);
         } else if (data) {
-            setAppointments(prev => prev.map(app => app.id === id ? data : app));
+             // FIX: Correctly typed the updated appointment and removed 'as any' to ensure type safety.
+             const updatedAppointment = {
+                ...data,
+                name: data.nome,
+                phone: data.telefone,
+                date: data.data,
+                time: data.horario.substring(0, 5),
+                status: data.status.charAt(0).toUpperCase() + data.status.slice(1)
+            } as Appointment;
+            setAppointments(prev => prev.map(app => app.id === id ? updatedAppointment : app));
         }
     };
 
@@ -1214,13 +1235,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         const isConfirmed = window.confirm('Tem certeza que deseja excluir este agendamento? Esta ação é permanente e não pode ser desfeita.');
         if (isConfirmed) {
             const { error } = await supabase
-                .from('appointments')
+                .from('agendamentos')
                 .delete()
                 .eq('id', id);
     
             if (error) {
                 console.error("Erro ao excluir agendamento:", error);
-                // Você pode adicionar um alerta para o usuário aqui, se desejar
             } else {
                 setAppointments(prev => prev.filter(app => app.id !== id));
             }
@@ -1447,7 +1467,7 @@ const App = () => {
     
     useEffect(() => {
         // Handle native OAuth callback & Universal Links
-        const listener = CapacitorApp.addListener('appUrlOpen', async (event) => {
+        const listenerPromise = CapacitorApp.addListener('appUrlOpen', async (event) => {
             const url = new URL(event.url);
             
             // Rota de Auth (com.oubook.app://auth-callback)
@@ -1475,12 +1495,16 @@ const App = () => {
             }
         });
         
-        Browser.addListener('browserFinished', () => {
+        const browserListenerPromise = Browser.addListener('browserFinished', () => {
             console.log('Browser fechado pelo usuário.');
         });
         
+        // FIX: Capacitor listeners return a promise that resolves to the listener handle.
+        // The .remove() method is on the handle, so we must call it after the promise resolves.
+        // This also fixes a memory leak from the un-removed browser listener.
         return () => {
-          listener.remove();
+          listenerPromise.then(listener => listener.remove());
+          browserListenerPromise.then(listener => listener.remove());
         };
     }, []);
 
@@ -1584,7 +1608,7 @@ const App = () => {
         return () => {
             authListener.subscription.unsubscribe();
         };
-    }, []);
+    }, [profile]);
 
     const router = useMemo(() => {
         const pathParts = path.split('/').filter(Boolean);
