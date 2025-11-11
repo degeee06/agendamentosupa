@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -1529,67 +1528,71 @@ const App = () => {
                 return;
             }
     
-            // CORREÇÃO: Busca na tabela `user_trials` para corresponder ao schema real.
-            // Step 1: Fetch profile from `user_trials`
-            let { data: userProfile, error } = await supabase
+            // SOLUÇÃO DEFINITIVA: Tenta buscar o perfil. Se falhar por QUALQUER motivo
+            // (não existe, RLS bloqueia), ele tenta criar. `upsert` é seguro e não
+            // criará duplicatas. Isso resolve o problema de usuários antigos sem perfil.
+            
+            // Step 1: Tenta buscar o perfil
+            let { data: userProfile, error: selectError } = await supabase
                 .from('user_trials')
                 .select('*')
                 .eq('user_id', currentUser.id)
                 .single();
-            
-            // Step 2: Handle new user creation
-            if (error && error.code === 'PGRST116') { 
-                const { data: newProfile, error: insertError } = await supabase
+    
+            // Step 2: Se não encontrou ou deu erro, cria o perfil.
+            if (selectError || !userProfile) {
+                if (selectError) {
+                    console.warn("Não foi possível buscar o perfil, tentando criar um. Erro:", selectError.message);
+                }
+                
+                // Usamos `upsert` para criar se não existir, ou não fazer nada se existir.
+                const { data: newProfile, error: upsertError } = await supabase
                     .from('user_trials')
-                    .insert({ user_id: currentUser.id, user_email: currentUser.email })
+                    .upsert({ user_id: currentUser.id, user_email: currentUser.email })
                     .select()
                     .single();
     
-                if (insertError) {
-                    console.error("Erro ao criar perfil:", insertError);
+                if (upsertError) {
+                    console.error("Erro crítico ao criar/garantir perfil:", upsertError);
+                    setUser(null); // Desloga o usuário para evitar estado inconsistente
+                    setProfile(null);
                     setIsLoading(false);
                     return;
                 }
                 userProfile = newProfile;
-            } else if (error) {
-                console.error("Error fetching user trial profile:", error);
-                setIsLoading(false);
-                return;
             }
     
-            // Step 3: Check for premium expiration (usando `ends_at`)
-            if (userProfile) {
-                const isPremium = userProfile.plan_type === 'premium';
-                const premiumExpired = isPremium && userProfile.ends_at && new Date(userProfile.ends_at) < new Date();
+            // Se chegamos aqui, `userProfile` DEFINITIVAMENTE existe.
+            // Agora podemos continuar com a lógica de verificação de plano.
     
-                if (premiumExpired) {
-                    const { data: revertedProfile, error: revertError } = await supabase
-                        .from('user_trials')
-                        .update({ plan_type: 'free_trial', ends_at: null })
-                        .eq('user_id', currentUser.id)
-                        .select()
-                        .single();
-                    
-                    if (revertError) {
-                        console.error("Error reverting expired plan:", revertError);
-                        userProfile.plan_type = 'free_trial'; 
-                    } else if (revertedProfile) {
-                        userProfile = revertedProfile;
-                    }
+            // Step 3: Check for premium expiration
+            const isPremium = userProfile.plan_type === 'premium';
+            const premiumExpired = isPremium && userProfile.ends_at && new Date(userProfile.ends_at) < new Date();
+
+            if (premiumExpired) {
+                const { data: revertedProfile, error: revertError } = await supabase
+                    .from('user_trials')
+                    .update({ plan_type: 'free_trial', ends_at: null })
+                    .eq('user_id', currentUser.id)
+                    .select()
+                    .single();
+                
+                if (!revertError && revertedProfile) {
+                    userProfile = revertedProfile;
                 }
+            }
     
-                // Step 4: Check for daily usage reset for trial users (usando `last_usage_date` e `daily_usage_count`)
-                const today = new Date().toISOString().split('T')[0];
-                if (userProfile.plan_type === 'free_trial' && userProfile.last_usage_date !== today) {
-                    const { data: updatedProfile, error: updateError } = await supabase
-                        .from('user_trials')
-                        .update({ daily_usage_count: 0, last_usage_date: today })
-                        .eq('user_id', currentUser.id)
-                        .select()
-                        .single();
-                    if (!updateError && updatedProfile) {
-                        userProfile = updatedProfile;
-                    }
+            // Step 4: Check for daily usage reset
+            const today = new Date().toISOString().split('T')[0];
+            if (userProfile.plan_type === 'free_trial' && userProfile.last_usage_date !== today) {
+                const { data: updatedProfile, error: updateError } = await supabase
+                    .from('user_trials')
+                    .update({ daily_usage_count: 0, last_usage_date: today })
+                    .eq('user_id', currentUser.id)
+                    .select()
+                    .single();
+                if (!updateError && updatedProfile) {
+                    userProfile = updatedProfile;
                 }
             }
             
