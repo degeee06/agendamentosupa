@@ -13,10 +13,7 @@ export default defineConfig(({ mode }) => {
       define: {},
       resolve: {
         alias: {
-          // FIX: The original `process.cwd()` caused a TypeScript type error because the
-          // full Node.js types were not available. `path.resolve()` without arguments
-          // correctly resolves to the project root and avoids this issue.
-          '@': path.resolve(),
+          '@': path.resolve(__dirname, '.'),
         }
       }
     };
