@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -11,6 +10,8 @@ declare let jspdf: any;
 
 const SUPABASE_URL = 'https://ehosmvbealefukkbqggp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVob3NtdmJlYWxlZnVra2JxZ2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjIzMDgsImV4cCI6MjA3NzU5ODMwOH0.IKqwxawiPnZT__Djj6ISgnQOawKnbboJ1TfqhSTf89M';
+// IMPORTANTE: Substitua pela URL de produção real do seu aplicativo para que os links públicos funcionem.
+const PRODUCTION_URL = 'https://oubook.vercel.app';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Tipos
@@ -249,7 +250,8 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
 };
 
 const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) => {
-    const link = `${window.location.origin}/book/${userId}`;
+    // Usa a URL de produção para garantir que o link funcione fora do ambiente local/app Capacitor.
+    const link = `${PRODUCTION_URL}/book/${userId}`;
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
