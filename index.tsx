@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -667,6 +666,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const [appointments, setAppointments] = useState<{ date: string; time: string; }[]>([]);
     
     const [linkStatus, setLinkStatus] = useState<'loading' | 'valid' | 'invalid' | 'used'>('loading');
+    const [bookingCompleted, setBookingCompleted] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
@@ -822,10 +822,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 console.error("CRITICAL: Failed to mark link as used after booking:", updateError);
             }
 
-            setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
-            setLinkStatus('used'); // Immediately mark as used on the frontend
-            setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
-            setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
+            setBookingCompleted(true);
         }
         setIsSaving(false);
     };
@@ -888,6 +885,20 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             </div>
         );
     };
+    
+    if (bookingCompleted) {
+        return (
+            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
+                <div className="glassmorphism rounded-2xl p-8">
+                    <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-white mb-2">Agendamento Concluído</h1>
+                    <p className="text-gray-400">
+                        Seu horário foi agendado com sucesso.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     if (linkStatus === 'loading') {
         return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
@@ -898,7 +909,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
                 <div className="glassmorphism rounded-2xl p-8">
                     <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold text-white mb-2">Link Inválido</h1>
+                    <h1 className="text-2xl font-bold text-white mb-2">{linkStatus === 'used' ? 'Link Utilizado' : 'Link Inválido'}</h1>
                     <p className="text-gray-400">
                         {linkStatus === 'used' 
                             ? 'Este link de agendamento já foi utilizado.' 
