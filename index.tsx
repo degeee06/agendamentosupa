@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -26,15 +28,15 @@ type Appointment = {
   user_id: string;
 };
 
-// ATENÇÃO: Este tipo foi modificado para corresponder à tabela `user_trials` do schema fornecido.
+// ATENÇÃO: O tipo foi ajustado para usar a tabela `user_trials`, que parece ser a correta para o projeto.
 type Profile = {
     user_id: string;
-    tipo_plano: 'free_trial' | 'premium';
-    contagem_uso_diario: number;
-    ultima_data_de_uso: string;
-    terms_accepted_at?: string; // Mantido para compatibilidade com lógica existente
-    termina_em?: string; // Corresponde ao `premium_expires_at` anterior
+    plan_type: 'free_trial' | 'premium_trial' | 'premium';
+    daily_usage_count: number;
+    last_usage_date: string | null;
+    ends_at?: string | null;
     max_usages: number;
+    terms_accepted_at?: string; // This is not from user_trials but seems to be used. Keep it.
 };
 
 
@@ -145,7 +147,8 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void | Promise<void>; onDelete: (id: string) => void | Promise<void>; }) => {
+// FIX: Use React.FC to correctly type the component and allow the 'key' prop for list rendering.
+const AppointmentCard: React.FC<{ appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void | Promise<void>; onDelete: (id: string) => void | Promise<void>; }> = ({ appointment, onUpdateStatus, onDelete }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button 
@@ -655,11 +658,11 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const fetchAdminData = async () => {
             setIsLoading(true);
             try {
-                // CORREÇÃO: Busca na tabela `user_trials` em vez de `profiles`
+                // CORREÇÃO: Busca na tabela `user_trials` para corresponder ao schema real.
                 const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
                     supabase.from('user_trials').select('*').eq('user_id', adminId).single(),
                     supabase.from('perfis_negocio').select('*').eq('user_id', adminId).single(),
-                    supabase.from('agendamentos').select('data, horario').eq('user_id', adminId).in('status', ['Pendente', 'Confirmado'])
+                    supabase.from('agendamentos').select('data, horario').eq('user_id', adminId).in('status', ['pendente', 'confirmado'])
                 ]);
 
                 if (profileRes.error) {
@@ -668,8 +671,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 }
                 
                 const today = new Date().toISOString().split('T')[0];
-                if (profileRes.data.ultima_data_de_uso !== today) {
-                    setAdminProfile({ ...profileRes.data, contagem_uso_diario: 0 });
+                if (profileRes.data.last_usage_date !== today) {
+                    setAdminProfile({ ...profileRes.data, daily_usage_count: 0 });
                 } else {
                     setAdminProfile(profileRes.data);
                 }
@@ -749,7 +752,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const dateString = selectedDate.toISOString().split('T')[0];
 
         const { data: existingAppointment } = await supabase
-            .from('agendamentos').select('id').eq('user_id', adminId).eq('telefone', unmaskedPhone).in('status', ['Pendente', 'Confirmado']).limit(1);
+            .from('agendamentos').select('id').eq('user_id', adminId).eq('telefone', unmaskedPhone).in('status', ['pendente', 'confirmado']).limit(1);
 
         if (existingAppointment && existingAppointment.length > 0) {
             setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este número de telefone.' });
@@ -757,27 +760,25 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             return;
         }
 
-        // CORREÇÃO: Utiliza `tipo_plano` e `contagem_uso_diario`
-        if (adminProfile && adminProfile.tipo_plano === 'free_trial' && adminProfile.contagem_uso_diario >= adminProfile.max_usages) {
+        if (adminProfile && adminProfile.plan_type === 'free_trial' && adminProfile.daily_usage_count >= adminProfile.max_usages) {
             setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
             setIsSaving(false);
             return;
         }
 
-        // CORREÇÃO: Nomes de colunas para corresponder ao schema do DB
         const { error } = await supabase.from('agendamentos').insert({
-            nome: name, email, telefone: unmaskedPhone, data: dateString, horario: selectedTime, user_id: adminId, status: 'Pendente'
+            nome: name, email, telefone: unmaskedPhone, data: dateString, horario: selectedTime, user_id: adminId, status: 'pendente'
         });
 
         if (error) {
             console.error("Erro ao salvar agendamento:", error);
             setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
-            if (adminProfile && adminProfile.tipo_plano === 'free_trial') {
+            if (adminProfile && adminProfile.plan_type === 'free_trial') {
                 const today = new Date().toISOString().split('T')[0];
-                const newUsage = adminProfile.ultima_data_de_uso === today ? adminProfile.contagem_uso_diario + 1 : 1;
-                 // CORREÇÃO: Atualiza a tabela `user_trials` com as colunas corretas
-                await supabase.from('user_trials').update({ contagem_uso_diario: newUsage, ultima_data_de_uso: today }).eq('user_id', adminId);
+                const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage_count + 1 : 1;
+                 // CORREÇÃO: Atualiza a tabela `user_trials` com as colunas corretas.
+                await supabase.from('user_trials').update({ daily_usage_count: newUsage, last_usage_date: today }).eq('user_id', adminId);
             }
 
             setMessage({ type: 'success', text: 'Seu horário foi confirmado! Você já pode fechar esta página.' });
@@ -1024,10 +1025,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     ]);
     const [isAssistantLoading, setIsAssistantLoading] = useState(false);
 
-    // CORREÇÃO: Lógica de limite baseada no perfil/plano corrigido
-    const usage = profile?.contagem_uso_diario ?? 0;
+    const usage = profile?.daily_usage_count ?? 0;
     const usageLimit = profile?.max_usages ?? 5;
-    const hasReachedLimit = profile?.tipo_plano === 'free_trial' && usage >= usageLimit;
+    const hasReachedLimit = profile?.plan_type === 'free_trial' && usage >= usageLimit;
 
 
     useEffect(() => {
@@ -1122,7 +1122,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             return;
         }
 
-        // CORREÇÃO: Nomes de colunas para corresponder ao schema do DB
         const { data, error } = await supabase
             .from('agendamentos')
             .insert({ nome: name, telefone: phone, email, data: date, horario: time, user_id: user.id, status: 'pendente' })
@@ -1144,14 +1143,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             } as Appointment;
             setAppointments(prev => [newAppointment, ...prev].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
 
-            if (profile.tipo_plano === 'free_trial') {
+            if (profile.plan_type === 'free_trial') {
                 const today = new Date().toISOString().split('T')[0];
-                const newUsage = profile.ultima_data_de_uso === today ? profile.contagem_uso_diario + 1 : 1;
+                const newUsage = profile.last_usage_date === today ? profile.daily_usage_count + 1 : 1;
                 
-                // CORREÇÃO: Atualiza a tabela `user_trials` com as colunas corretas
+                // CORREÇÃO: Atualiza a tabela `user_trials` com as colunas corretas.
                 const { data: updatedProfile, error: profileError } = await supabase
                     .from('user_trials')
-                    .update({ contagem_uso_diario: newUsage, ultima_data_de_uso: today })
+                    .update({ daily_usage_count: newUsage, last_usage_date: today })
                     .eq('user_id', user.id)
                     .select()
                     .single();
@@ -1160,7 +1159,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     console.error("Erro ao atualizar perfil:", profileError);
                 } else if (updatedProfile) {
                     setProfile(updatedProfile);
-                    if (updatedProfile.tipo_plano === 'free_trial' && updatedProfile.contagem_uso_diario >= updatedProfile.max_usages) {
+                    if (updatedProfile.plan_type === 'free_trial' && updatedProfile.daily_usage_count >= updatedProfile.max_usages) {
                         setIsUpgradeModalOpen(true);
                     }
                 }
@@ -1364,7 +1363,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 <h2 className="text-2xl sm:text-3xl font-bold text-white">Seus Agendamentos</h2>
              </div>
              <div className="flex flex-wrap items-center justify-center gap-2">
-                {profile?.tipo_plano === 'premium' ? (
+                {profile?.plan_type === 'premium' ? (
                     <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-2 bg-green-500/20 border border-green-400/30">
                         <StarIcon className="w-5 h-5 text-yellow-400" />
                         <span className="font-bold text-white">Plano Premium</span>
@@ -1530,7 +1529,7 @@ const App = () => {
                 return;
             }
     
-            // CORREÇÃO: Busca na tabela `user_trials` e ajusta lógica
+            // CORREÇÃO: Busca na tabela `user_trials` para corresponder ao schema real.
             // Step 1: Fetch profile from `user_trials`
             let { data: userProfile, error } = await supabase
                 .from('user_trials')
@@ -1547,7 +1546,7 @@ const App = () => {
                     .single();
     
                 if (insertError) {
-                    console.error("Erro ao criar perfil de trial:", insertError);
+                    console.error("Erro ao criar perfil:", insertError);
                     setIsLoading(false);
                     return;
                 }
@@ -1558,33 +1557,33 @@ const App = () => {
                 return;
             }
     
-            // Step 3: Check for premium expiration (usando `termina_em`)
+            // Step 3: Check for premium expiration (usando `ends_at`)
             if (userProfile) {
-                const isPremium = userProfile.tipo_plano === 'premium';
-                const premiumExpired = isPremium && userProfile.termina_em && new Date(userProfile.termina_em) < new Date();
+                const isPremium = userProfile.plan_type === 'premium';
+                const premiumExpired = isPremium && userProfile.ends_at && new Date(userProfile.ends_at) < new Date();
     
                 if (premiumExpired) {
                     const { data: revertedProfile, error: revertError } = await supabase
                         .from('user_trials')
-                        .update({ tipo_plano: 'free_trial', termina_em: null })
+                        .update({ plan_type: 'free_trial', ends_at: null })
                         .eq('user_id', currentUser.id)
                         .select()
                         .single();
                     
                     if (revertError) {
                         console.error("Error reverting expired plan:", revertError);
-                        userProfile.tipo_plano = 'free_trial'; 
+                        userProfile.plan_type = 'free_trial'; 
                     } else if (revertedProfile) {
                         userProfile = revertedProfile;
                     }
                 }
     
-                // Step 4: Check for daily usage reset for trial users (usando `ultima_data_de_uso` e `contagem_uso_diario`)
+                // Step 4: Check for daily usage reset for trial users (usando `last_usage_date` e `daily_usage_count`)
                 const today = new Date().toISOString().split('T')[0];
-                if (userProfile.tipo_plano === 'free_trial' && userProfile.ultima_data_de_uso !== today) {
+                if (userProfile.plan_type === 'free_trial' && userProfile.last_usage_date !== today) {
                     const { data: updatedProfile, error: updateError } = await supabase
                         .from('user_trials')
-                        .update({ contagem_uso_diario: 0, ultima_data_de_uso: today })
+                        .update({ daily_usage_count: 0, last_usage_date: today })
                         .eq('user_id', currentUser.id)
                         .select()
                         .single();
