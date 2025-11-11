@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -250,24 +251,84 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
 };
 
 const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) => {
-    // Usa a URL de produção para garantir que o link funcione fora do ambiente local/app Capacitor.
-    const link = `${PRODUCTION_URL}/book/${userId}`;
+    const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Reset state when modal is closed
+        if (!isOpen) {
+            setGeneratedLink(null);
+            setCopied(false);
+            setError(null);
+        }
+    }, [isOpen]);
+
+    const handleGenerateLink = async () => {
+        setIsGenerating(true);
+        setError(null);
+        setCopied(false);
+        try {
+            const { data, error } = await supabase
+                .from('one_time_links')
+                .insert({ user_id: userId })
+                .select('id')
+                .single();
+            
+            if (error || !data) {
+                throw error || new Error("Não foi possível obter o ID do link gerado.");
+            }
+            
+            const newLink = `${PRODUCTION_URL}/book-link/${data.id}`;
+            setGeneratedLink(newLink);
+        } catch (err: any) {
+            console.error("Erro ao gerar link:", err);
+            setError("Não foi possível gerar o link. Tente novamente.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(link);
+        if (!generatedLink) return;
+        navigator.clipboard.writeText(generatedLink);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Seu Link de Agendamento">
-            <p className="text-gray-300 mb-4">Compartilhe este link com seus clientes para que eles possam agendar um horário com você.</p>
-            <div className="flex items-center space-x-2 bg-black/30 p-3 rounded-lg border border-gray-600">
-                <LinkIcon className="w-5 h-5 text-gray-400" />
-                <input type="text" value={link} readOnly className="bg-transparent text-white w-full outline-none" />
-                <button onClick={handleCopy} className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 transition-colors">
-                    {copied ? 'Copiado!' : 'Copiar'}
+        <Modal isOpen={isOpen} onClose={onClose} title="Link de Agendamento">
+            <div className="space-y-4">
+                <p className="text-gray-300">
+                    Gere um link de uso único para compartilhar com seus clientes. Cada link só pode ser usado para um agendamento.
+                </p>
+                
+                {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+                
+                {generatedLink ? (
+                    <div className="flex items-center space-x-2 bg-black/30 p-3 rounded-lg border border-gray-600">
+                        <LinkIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                        <input type="text" value={generatedLink} readOnly className="bg-transparent text-white w-full outline-none text-sm" />
+                        <button onClick={handleCopy} className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 transition-colors flex-shrink-0">
+                            {copied ? 'Copiado!' : 'Copiar'}
+                        </button>
+                    </div>
+                ) : null}
+
+                <button 
+                    onClick={handleGenerateLink}
+                    disabled={isGenerating}
+                    className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                >
+                    {isGenerating ? (
+                        <LoaderIcon className="w-6 h-6" />
+                    ) : (
+                        <>
+                            <LinkIcon className="w-5 h-5" />
+                            <span>{generatedLink ? 'Gerar Novo Link' : 'Gerar Link de Uso Único'}</span>
+                        </>
+                    )}
                 </button>
             </div>
         </Modal>
@@ -590,7 +651,7 @@ const AssistantModal = ({ isOpen, onClose, messages, onSendMessage, isLoading }:
 };
 
 
-const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
+const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -600,62 +661,74 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     
+    const [adminId, setAdminId] = useState<string | null>(null);
     const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
     const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
     const [appointments, setAppointments] = useState<{ date: string; time: string; }[]>([]);
     
-    const [isLoading, setIsLoading] = useState(true);
+    const [linkStatus, setLinkStatus] = useState<'loading' | 'valid' | 'invalid' | 'used'>('loading');
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
     useEffect(() => {
-        const fetchAdminData = async () => {
-            setIsLoading(true);
+        const validateLinkAndFetchData = async () => {
             try {
+                setLinkStatus('loading');
+                const { data: linkData, error: linkError } = await supabase
+                    .from('one_time_links')
+                    .select('user_id, is_used')
+                    .eq('id', tokenId)
+                    .single();
+
+                if (linkError || !linkData) {
+                    setLinkStatus('invalid');
+                    return;
+                }
+                if (linkData.is_used) {
+                    setLinkStatus('used');
+                    return;
+                }
+
+                const currentAdminId = linkData.user_id;
+                setAdminId(currentAdminId);
+
                 const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
-                    supabase.from('profiles').select('*').eq('id', adminId).single(),
-                    supabase.from('business_profiles').select('*').eq('user_id', adminId).single(),
-                    supabase.from('appointments').select('date, time').eq('user_id', adminId).in('status', ['Pendente', 'Confirmado'])
+                    supabase.from('profiles').select('*').eq('id', currentAdminId).single(),
+                    supabase.from('business_profiles').select('*').eq('user_id', currentAdminId).single(),
+                    supabase.from('appointments').select('date, time').eq('user_id', currentAdminId).in('status', ['Pendente', 'Confirmado'])
                 ]);
 
                 if (profileRes.error) throw profileRes.error;
                 
                 const today = new Date().toISOString().split('T')[0];
-                if (profileRes.data.last_usage_date !== today) {
-                    setAdminProfile({ ...profileRes.data, daily_usage: 0 });
-                } else {
-                    setAdminProfile(profileRes.data);
-                }
-
+                setAdminProfile(profileRes.data.last_usage_date !== today
+                    ? { ...profileRes.data, daily_usage: 0 }
+                    : profileRes.data);
+                
                 setAppointments(appointmentsRes.data || []);
                 
                 const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
                 const defaultStartTime = '09:00';
                 const defaultEndTime = '17:00';
 
-                if (businessProfileRes.data) {
-                    setBusinessProfile({
-                        ...businessProfileRes.data,
-                        blocked_dates: businessProfileRes.data.blocked_dates || [],
-                        blocked_times: businessProfileRes.data.blocked_times || {},
-                        working_days: businessProfileRes.data.working_days || defaultWorkingDays,
-                        start_time: businessProfileRes.data.start_time || defaultStartTime,
-                        end_time: businessProfileRes.data.end_time || defaultEndTime,
-                    });
-                } else {
-                    setBusinessProfile({ user_id: adminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
-                }
+                setBusinessProfile(businessProfileRes.data ? {
+                    ...businessProfileRes.data,
+                    blocked_dates: businessProfileRes.data.blocked_dates || [],
+                    blocked_times: businessProfileRes.data.blocked_times || {},
+                    working_days: businessProfileRes.data.working_days || defaultWorkingDays,
+                    start_time: businessProfileRes.data.start_time || defaultStartTime,
+                    end_time: businessProfileRes.data.end_time || defaultEndTime,
+                } : { user_id: currentAdminId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
 
+                setLinkStatus('valid');
             } catch (error) {
                 console.error('Erro ao buscar dados do admin:', error);
-                setMessage({ type: 'error', text: 'Não foi possível carregar a página de agendamento.' });
-            } finally {
-                setIsLoading(false);
+                setLinkStatus('invalid');
             }
         };
-        fetchAdminData();
-    }, [adminId]);
+        validateLinkAndFetchData();
+    }, [tokenId]);
 
     const isDayAvailable = useCallback((date: Date): boolean => {
         if (!businessProfile) return false;
@@ -705,7 +778,7 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedDate || !selectedTime) return;
+        if (!selectedDate || !selectedTime || !adminId) return;
 
         setMessage(null);
         const unmaskedPhone = phone.replace(/\D/g, '');
@@ -740,11 +813,17 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         if (error) {
             setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
-            // A lógica de incremento do uso diário para planos 'trial' é gerenciada
-            // por um gatilho no banco de dados (trigger) para garantir que a operação
-            // seja atômica e segura. A remoção da atualização do lado do cliente
-            // corrige o erro de permissão que ocorria em plataformas nativas (Capacitor).
+            const { error: updateError } = await supabase
+                .from('one_time_links')
+                .update({ is_used: true })
+                .eq('id', tokenId);
+
+            if (updateError) {
+                console.error("CRITICAL: Failed to mark link as used after booking:", updateError);
+            }
+
             setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
+            setLinkStatus('used'); // Immediately mark as used on the frontend
             setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
             setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
         }
@@ -810,8 +889,25 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         );
     };
 
-    if (isLoading) {
+    if (linkStatus === 'loading') {
         return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+    }
+
+    if (linkStatus === 'invalid' || linkStatus === 'used') {
+        return (
+            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
+                <div className="glassmorphism rounded-2xl p-8">
+                    <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-white mb-2">Link Inválido</h1>
+                    <p className="text-gray-400">
+                        {linkStatus === 'used' 
+                            ? 'Este link de agendamento já foi utilizado.' 
+                            : 'Este link de agendamento é inválido ou expirou.'}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">Por favor, solicite um novo link ao profissional.</p>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -1542,8 +1638,8 @@ const App = () => {
 
     const router = useMemo(() => {
         const pathParts = path.split('/').filter(Boolean);
-        if (pathParts[0] === 'book' && pathParts[1]) {
-            return <PaginaDeAgendamento adminId={pathParts[1]} />;
+        if (pathParts[0] === 'book-link' && pathParts[1]) {
+            return <PaginaDeAgendamento tokenId={pathParts[1]} />;
         }
         if (user && profile) {
             return <Dashboard user={user} profile={profile} setProfile={setProfile} />;
