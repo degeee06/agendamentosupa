@@ -26,14 +26,17 @@ type Appointment = {
   user_id: string;
 };
 
+// ATENÇÃO: Este tipo foi modificado para corresponder à tabela `user_trials` do schema fornecido.
 type Profile = {
-    id: string;
-    plan: 'trial' | 'premium';
-    daily_usage: number;
-    last_usage_date: string;
-    terms_accepted_at?: string;
-    premium_expires_at?: string;
+    user_id: string;
+    tipo_plano: 'free_trial' | 'premium';
+    contagem_uso_diario: number;
+    ultima_data_de_uso: string;
+    terms_accepted_at?: string; // Mantido para compatibilidade com lógica existente
+    termina_em?: string; // Corresponde ao `premium_expires_at` anterior
+    max_usages: number;
 };
+
 
 // TIPO CORRIGIDO para corresponder ao schema do banco de dados `perfis_negocio`
 type BusinessProfileFromDB = {
@@ -142,7 +145,7 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }) => {
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void | Promise<void>; onDelete: (id: string) => void | Promise<void>; }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button 
@@ -652,9 +655,9 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         const fetchAdminData = async () => {
             setIsLoading(true);
             try {
-                // Proceed with loading public data
+                // CORREÇÃO: Busca na tabela `user_trials` em vez de `profiles`
                 const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
-                    supabase.from('profiles').select('*').eq('id', adminId).single(),
+                    supabase.from('user_trials').select('*').eq('user_id', adminId).single(),
                     supabase.from('perfis_negocio').select('*').eq('user_id', adminId).single(),
                     supabase.from('agendamentos').select('data, horario').eq('user_id', adminId).in('status', ['Pendente', 'Confirmado'])
                 ]);
@@ -665,8 +668,8 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
                 }
                 
                 const today = new Date().toISOString().split('T')[0];
-                if (profileRes.data.last_usage_date !== today) {
-                    setAdminProfile({ ...profileRes.data, daily_usage: 0 });
+                if (profileRes.data.ultima_data_de_uso !== today) {
+                    setAdminProfile({ ...profileRes.data, contagem_uso_diario: 0 });
                 } else {
                     setAdminProfile(profileRes.data);
                 }
@@ -754,23 +757,27 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
             return;
         }
 
-        if (adminProfile && adminProfile.plan === 'trial' && adminProfile.daily_usage >= 5) {
+        // CORREÇÃO: Utiliza `tipo_plano` e `contagem_uso_diario`
+        if (adminProfile && adminProfile.tipo_plano === 'free_trial' && adminProfile.contagem_uso_diario >= adminProfile.max_usages) {
             setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
             setIsSaving(false);
             return;
         }
 
+        // CORREÇÃO: Nomes de colunas para corresponder ao schema do DB
         const { error } = await supabase.from('agendamentos').insert({
             nome: name, email, telefone: unmaskedPhone, data: dateString, horario: selectedTime, user_id: adminId, status: 'Pendente'
         });
 
         if (error) {
+            console.error("Erro ao salvar agendamento:", error);
             setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
-            if (adminProfile && adminProfile.plan === 'trial') {
+            if (adminProfile && adminProfile.tipo_plano === 'free_trial') {
                 const today = new Date().toISOString().split('T')[0];
-                const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
-                await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
+                const newUsage = adminProfile.ultima_data_de_uso === today ? adminProfile.contagem_uso_diario + 1 : 1;
+                 // CORREÇÃO: Atualiza a tabela `user_trials` com as colunas corretas
+                await supabase.from('user_trials').update({ contagem_uso_diario: newUsage, ultima_data_de_uso: today }).eq('user_id', adminId);
             }
 
             setMessage({ type: 'success', text: 'Seu horário foi confirmado! Você já pode fechar esta página.' });
@@ -1017,10 +1024,11 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     ]);
     const [isAssistantLoading, setIsAssistantLoading] = useState(false);
 
+    // CORREÇÃO: Lógica de limite baseada no perfil/plano corrigido
+    const usage = profile?.contagem_uso_diario ?? 0;
+    const usageLimit = profile?.max_usages ?? 5;
+    const hasReachedLimit = profile?.tipo_plano === 'free_trial' && usage >= usageLimit;
 
-    const TRIAL_LIMIT = 5;
-    const usage = profile?.daily_usage ?? 0;
-    const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
 
     useEffect(() => {
         const scriptId = 'hotmart-script';
@@ -1114,6 +1122,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             return;
         }
 
+        // CORREÇÃO: Nomes de colunas para corresponder ao schema do DB
         const { data, error } = await supabase
             .from('agendamentos')
             .insert({ nome: name, telefone: phone, email, data: date, horario: time, user_id: user.id, status: 'pendente' })
@@ -1135,20 +1144,23 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             } as Appointment;
             setAppointments(prev => [newAppointment, ...prev].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
 
-            if (profile.plan === 'trial') {
+            if (profile.tipo_plano === 'free_trial') {
                 const today = new Date().toISOString().split('T')[0];
-                const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
+                const newUsage = profile.ultima_data_de_uso === today ? profile.contagem_uso_diario + 1 : 1;
+                
+                // CORREÇÃO: Atualiza a tabela `user_trials` com as colunas corretas
                 const { data: updatedProfile, error: profileError } = await supabase
-                    .from('profiles')
-                    .update({ daily_usage: newUsage, last_usage_date: today })
-                    .eq('id', user.id)
+                    .from('user_trials')
+                    .update({ contagem_uso_diario: newUsage, ultima_data_de_uso: today })
+                    .eq('user_id', user.id)
                     .select()
                     .single();
+
                 if (profileError) {
                     console.error("Erro ao atualizar perfil:", profileError);
                 } else if (updatedProfile) {
                     setProfile(updatedProfile);
-                    if (updatedProfile.plan === 'trial' && updatedProfile.daily_usage >= TRIAL_LIMIT) {
+                    if (updatedProfile.tipo_plano === 'free_trial' && updatedProfile.contagem_uso_diario >= updatedProfile.max_usages) {
                         setIsUpgradeModalOpen(true);
                     }
                 }
@@ -1352,14 +1364,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 <h2 className="text-2xl sm:text-3xl font-bold text-white">Seus Agendamentos</h2>
              </div>
              <div className="flex flex-wrap items-center justify-center gap-2">
-                {profile?.plan === 'premium' ? (
+                {profile?.tipo_plano === 'premium' ? (
                     <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-2 bg-green-500/20 border border-green-400/30">
                         <StarIcon className="w-5 h-5 text-yellow-400" />
                         <span className="font-bold text-white">Plano Premium</span>
                     </div>
                 ) : (
                     <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3">
-                        <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
+                        <span className="font-bold text-white">{`Plano Trial: ${usage}/${usageLimit} usos hoje`}</span>
                         <a
                             href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
                             onClick={(e) => e.preventDefault()}
@@ -1452,7 +1464,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
         <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
-        <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} />
+        <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={usageLimit} />
         <AssistantModal isOpen={isAssistantModalOpen} onClose={() => setIsAssistantModalOpen(false)} messages={assistantMessages} onSendMessage={handleSendMessageToAssistant} isLoading={isAssistantLoading} />
       </div>
     );
@@ -1518,61 +1530,62 @@ const App = () => {
                 return;
             }
     
-            // Step 1: Fetch profile
+            // CORREÇÃO: Busca na tabela `user_trials` e ajusta lógica
+            // Step 1: Fetch profile from `user_trials`
             let { data: userProfile, error } = await supabase
-                .from('profiles')
+                .from('user_trials')
                 .select('*')
-                .eq('id', currentUser.id)
+                .eq('user_id', currentUser.id)
                 .single();
             
-            // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
+            // Step 2: Handle new user creation
             if (error && error.code === 'PGRST116') { 
                 const { data: newProfile, error: insertError } = await supabase
-                    .from('profiles')
-                    .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                    .from('user_trials')
+                    .insert({ user_id: currentUser.id, user_email: currentUser.email })
                     .select()
                     .single();
     
                 if (insertError) {
-                    console.error("Erro ao criar perfil:", insertError);
+                    console.error("Erro ao criar perfil de trial:", insertError);
                     setIsLoading(false);
                     return;
                 }
                 userProfile = newProfile;
             } else if (error) {
-                console.error("Error fetching profile:", error);
+                console.error("Error fetching user trial profile:", error);
                 setIsLoading(false);
                 return;
             }
     
-            // Step 3: Check for premium expiration
+            // Step 3: Check for premium expiration (usando `termina_em`)
             if (userProfile) {
-                const isPremium = userProfile.plan === 'premium';
-                const premiumExpired = isPremium && userProfile.premium_expires_at && new Date(userProfile.premium_expires_at) < new Date();
+                const isPremium = userProfile.tipo_plano === 'premium';
+                const premiumExpired = isPremium && userProfile.termina_em && new Date(userProfile.termina_em) < new Date();
     
                 if (premiumExpired) {
                     const { data: revertedProfile, error: revertError } = await supabase
-                        .from('profiles')
-                        .update({ plan: 'trial', premium_expires_at: null })
-                        .eq('id', currentUser.id)
+                        .from('user_trials')
+                        .update({ tipo_plano: 'free_trial', termina_em: null })
+                        .eq('user_id', currentUser.id)
                         .select()
                         .single();
                     
                     if (revertError) {
                         console.error("Error reverting expired plan:", revertError);
-                        userProfile.plan = 'trial'; 
+                        userProfile.tipo_plano = 'free_trial'; 
                     } else if (revertedProfile) {
                         userProfile = revertedProfile;
                     }
                 }
     
-                // Step 4: Check for daily usage reset for trial users
+                // Step 4: Check for daily usage reset for trial users (usando `ultima_data_de_uso` e `contagem_uso_diario`)
                 const today = new Date().toISOString().split('T')[0];
-                if (userProfile.plan === 'trial' && userProfile.last_usage_date !== today) {
+                if (userProfile.tipo_plano === 'free_trial' && userProfile.ultima_data_de_uso !== today) {
                     const { data: updatedProfile, error: updateError } = await supabase
-                        .from('profiles')
-                        .update({ daily_usage: 0, last_usage_date: today })
-                        .eq('id', currentUser.id)
+                        .from('user_trials')
+                        .update({ contagem_uso_diario: 0, ultima_data_de_uso: today })
+                        .eq('user_id', currentUser.id)
                         .select()
                         .single();
                     if (!updateError && updatedProfile) {
@@ -1596,7 +1609,7 @@ const App = () => {
                 if (localStorage.getItem('termsAccepted') !== 'true') {
                     localStorage.setItem('termsAccepted', 'true');
                 }
-                if (!profile || profile.id !== currentUser.id) {
+                if (!profile || profile.user_id !== currentUser.id) {
                     checkUser();
                 }
             } else {
