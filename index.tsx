@@ -738,11 +738,10 @@ const PaginaDeAgendamento = ({ adminId }: { adminId: string }) => {
         if (error) {
             setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
-            if (adminProfile && adminProfile.plan === 'trial') {
-                const today = new Date().toISOString().split('T')[0];
-                const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
-                await supabase.from('profiles').update({ daily_usage: newUsage, last_usage_date: today }).eq('id', adminId);
-            }
+            // A lógica de incremento do uso diário para planos 'trial' é gerenciada
+            // por um gatilho no banco de dados (trigger) para garantir que a operação
+            // seja atômica e segura. A remoção da atualização do lado do cliente
+            // corrige o erro de permissão que ocorria em plataformas nativas (Capacitor).
             setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
             setAppointments(prev => [...prev, { date: dateString, time: selectedTime! }]);
             setName(''); setEmail(''); setPhone(''); setSelectedDate(null); setSelectedTime(null);
