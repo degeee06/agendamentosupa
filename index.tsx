@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -534,7 +535,6 @@ const UpgradeModal = ({ isOpen, onClose, limit }: { isOpen: boolean, onClose: ()
                     Seu limite de uso será reiniciado automaticamente amanhã, à meia-noite (00:00). Para continuar agendando hoje, faça o upgrade para o plano Premium.
                 </p>
                 <a 
-                    onClick={(e) => e.preventDefault()}
                     href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
                     className="hotmart-fb hotmart__button-checkout w-full"
                 >
@@ -1403,7 +1403,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
                         <a
                             href="https://pay.hotmart.com/U102480243K?checkoutMode=2"
-                            onClick={(e) => e.preventDefault()}
                             className="hotmart-fb hotmart__button-checkout"
                         >
                             UPGRADE
