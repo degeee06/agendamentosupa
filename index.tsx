@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -134,7 +135,8 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => void; onDelete: (id: string) => void; }) => {
+// FIX: Updated prop types for onUpdateStatus and onDelete to correctly handle async functions (which return a Promise).
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => Promise<void>; onDelete: (id: string) => Promise<void>; }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button 
@@ -187,7 +189,8 @@ const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointmen
     );
 };
 
-const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
+// FIX: Made children prop optional to resolve TypeScript errors in wrapper components.
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children?: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
     const sizeClasses = {
         md: 'max-w-md',
         lg: 'max-w-lg',
@@ -701,10 +704,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
                 if (profileRes.error) throw profileRes.error;
                 
-                const today = new Date().toISOString().split('T')[0];
-                setAdminProfile(profileRes.data.last_usage_date !== today
-                    ? { ...profileRes.data, daily_usage: 0 }
-                    : profileRes.data);
+                setAdminProfile(profileRes.data);
                 
                 setAppointments(appointmentsRes.data || []);
                 
@@ -800,10 +800,14 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             return;
         }
 
-        if (adminProfile && adminProfile.plan === 'trial' && adminProfile.daily_usage >= 5) {
-            setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
-            setIsSaving(false);
-            return;
+        if (adminProfile && adminProfile.plan === 'trial') {
+            const today = new Date().toISOString().split('T')[0];
+            const currentUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage : 0;
+            if (currentUsage >= 5) {
+                setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
+                setIsSaving(false);
+                return;
+            }
         }
 
         const { error } = await supabase.from('appointments').insert({
@@ -813,6 +817,20 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         if (error) {
             setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
         } else {
+            if (adminProfile?.plan === 'trial') {
+                const today = new Date().toISOString().split('T')[0];
+                const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .update({ daily_usage: newUsage, last_usage_date: today })
+                    .eq('id', adminId);
+                
+                if (profileError) {
+                    // Non-critical error for the end-user, just log it.
+                    console.error("Failed to update admin usage count:", profileError);
+                }
+            }
+
             const { error: updateError } = await supabase
                 .from('one_time_links')
                 .update({ is_used: true })
