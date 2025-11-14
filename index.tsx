@@ -791,58 +791,31 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         
         const dateString = selectedDate.toISOString().split('T')[0];
 
-        const { data: existingAppointment } = await supabase
-            .from('appointments').select('id').eq('user_id', adminId).eq('phone', unmaskedPhone).in('status', ['Pendente', 'Confirmado']).limit(1);
+        try {
+            const { data, error } = await supabase.functions.invoke('book-appointment-public', {
+                body: {
+                    tokenId: tokenId,
+                    name: name,
+                    phone: unmaskedPhone,
+                    email: email,
+                    date: dateString,
+                    time: selectedTime,
+                },
+            });
 
-        if (existingAppointment && existingAppointment.length > 0) {
-            setMessage({ type: 'error', text: 'Você já possui um agendamento ativo com este número de telefone.' });
-            setIsSaving(false);
-            return;
-        }
-
-        if (adminProfile && adminProfile.plan === 'trial') {
-            const today = new Date().toISOString().split('T')[0];
-            const currentUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage : 0;
-            if (currentUsage >= 5) {
-                setMessage({ type: 'error', text: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' });
-                setIsSaving(false);
-                return;
-            }
-        }
-
-        const { error } = await supabase.from('appointments').insert({
-            name, email, phone: unmaskedPhone, date: dateString, time: selectedTime, user_id: adminId, status: 'Pendente'
-        });
-
-        if (error) {
-            setMessage({ type: 'error', text: 'Ocorreu um erro ao salvar seu agendamento.' });
-        } else {
-            if (adminProfile?.plan === 'trial') {
-                const today = new Date().toISOString().split('T')[0];
-                const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .update({ daily_usage: newUsage, last_usage_date: today })
-                    .eq('id', adminId);
-                
-                if (profileError) {
-                    // Non-critical error for the end-user, just log it.
-                    console.error("Failed to update admin usage count:", profileError);
-                }
-            }
-
-            const { error: updateError } = await supabase
-                .from('one_time_links')
-                .update({ is_used: true })
-                .eq('id', tokenId);
-
-            if (updateError) {
-                console.error("CRITICAL: Failed to mark link as used after booking:", updateError);
+            if (error) {
+                // A edge function pode retornar mensagens de erro específicas
+                const errorMessage = (data as any)?.error || 'Ocorreu um erro ao salvar seu agendamento. Tente novamente.';
+                throw new Error(errorMessage);
             }
 
             setBookingCompleted(true);
+
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.message });
+        } finally {
+            setIsSaving(false);
         }
-        setIsSaving(false);
     };
 
     const handleDateSelect = (date: Date) => {
