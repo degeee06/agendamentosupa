@@ -4,7 +4,6 @@ import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { PushNotifications } from '@capacitor/push-notifications';
 
 
 declare let jspdf: any;
@@ -1207,48 +1206,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             supabase.removeChannel(broadcastChannel);
         };
     }, [user.id, fetchDashboardData]);
-    
-    // Efeito para registrar para notificações push em plataformas nativas
-    useEffect(() => {
-        if (Capacitor.isNativePlatform() && user.id) {
-            registerForPushNotifications(user.id);
-        }
-    }, [user.id]);
-    
-    const registerForPushNotifications = async (userId: string) => {
-        try {
-            let permStatus = await PushNotifications.checkPermissions();
-    
-            if (permStatus.receive === 'prompt') {
-                permStatus = await PushNotifications.requestPermissions();
-            }
-    
-            if (permStatus.receive !== 'granted') {
-                console.log('Permissão para notificações não concedida.');
-                return;
-            }
-    
-            await PushNotifications.register();
-    
-            PushNotifications.addListener('registration', async (token) => {
-                console.log('Push registration success, token:', token.value);
-                const { error } = await supabase.from('notification_tokens').upsert(
-                    { token: token.value, user_id: userId },
-                    { onConflict: 'token' }
-                );
-                if (error) {
-                    console.error('Erro ao salvar token de notificação:', error);
-                }
-            });
-    
-            PushNotifications.addListener('registrationError', (error) => {
-                console.error('Erro no registro de push:', error);
-            });
-    
-        } catch (error) {
-            console.error("Erro ao configurar notificações push:", error);
-        }
-    };
 
     const filteredAppointments = useMemo(() => {
         return appointments
