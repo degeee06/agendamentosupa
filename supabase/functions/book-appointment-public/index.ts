@@ -1,16 +1,131 @@
+// Importa os módulos Deno necessários.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { create, getNumericDate } from "https://deno.land/x/djwt@v2.4/mod.ts";
 
-// Declaração para satisfazer o verificador de tipos do TypeScript em ambientes não-Deno.
+// Declaração para satisfazer o verificador de tipos do TypeScript.
 declare const Deno: any;
 
-// Headers CORS padrão para invocação da função a partir do navegador.
+// Headers CORS padrão.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const DenoEnv = (Deno as any).env;
+
+// Função auxiliar para obter um token de acesso OAuth2 a partir da chave da conta de serviço.
+async function getAccessToken() {
+  const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
+  if (!serviceAccountJSON) {
+    throw new Error('O segredo FCM_SERVICE_ACCOUNT_KEY não está configurado no Supabase.');
+  }
+
+  const serviceAccount = JSON.parse(serviceAccountJSON);
+
+  // Formata a chave privada para importação.
+  const privateKeyData = atob(
+    serviceAccount.private_key
+      .replace('-----BEGIN PRIVATE KEY-----', '')
+      .replace('-----END PRIVATE KEY-----', '')
+      .replace(/\n/g, '')
+  );
+  const privateKeyBuffer = new Uint8Array(privateKeyData.length);
+  for (let i = 0; i < privateKeyData.length; i++) {
+    privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
+  }
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    privateKeyBuffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    true,
+    ["sign"]
+  );
+
+  // Cria o JWT para solicitar o token de acesso.
+  const jwt = await create({ alg: "RS256", typ: "JWT" }, {
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: getNumericDate(3600), // Expira em 1 hora
+    iat: getNumericDate(0),
+  }, key);
+
+  // Solicita o token de acesso ao Google.
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+
+  const tokenData = await tokenResponse.json();
+  if (!tokenResponse.ok) {
+    throw new Error(`Erro ao obter token de acesso: ${JSON.stringify(tokenData)}`);
+  }
+
+  return tokenData.access_token;
+}
+
+
+// Função para enviar notificações push usando a API v1 do FCM.
+const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
+  try {
+    const { data: tokensData, error: tokensError } = await supabaseAdmin
+      .from('notification_tokens')
+      .select('token')
+      .eq('user_id', userId);
+
+    if (tokensError) throw tokensError;
+    if (!tokensData || tokensData.length === 0) {
+      console.log(`Nenhum token de notificação encontrado para o usuário: ${userId}`);
+      return;
+    }
+
+    const accessToken = await getAccessToken();
+    const serviceAccount = JSON.parse(DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY'));
+    const projectId = serviceAccount.project_id;
+    const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+
+    const sendPromises = tokensData.map((t: { token: string }) => {
+      const message = {
+        message: {
+          token: t.token,
+          notification: {
+            title: title,
+            body: body,
+          },
+        },
+      };
+
+      return fetch(fcmEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+    });
+
+    const responses = await Promise.all(sendPromises);
+    
+    responses.forEach(async (response, index) => {
+        if (!response.ok) {
+            console.error(`Erro ao enviar notificação para o token ${tokensData[index].token}: ${response.statusText}`, await response.text());
+        }
+    });
+
+    console.log(`Tentativa de envio de ${responses.length} notificações concluída.`);
+
+  } catch (error) {
+    console.error('Erro inesperado na função sendPushNotification:', error.message);
+  }
+};
+
 
 serve(async (req: Request) => {
   // Lida com a requisição de preflight do CORS.
@@ -108,13 +223,21 @@ serve(async (req: Request) => {
     }
 
     // 6. Envia uma notificação de broadcast para o dashboard do usuário.
-    // Isso é necessário porque a inserção com a chave de admin (service_role) não dispara o Realtime baseado em RLS.
     const channel = supabaseAdmin.channel(`dashboard-${adminId}`);
     await channel.send({
       type: 'broadcast',
       event: 'new_public_appointment',
       payload: newAppointment,
     });
+    
+    // 7. Envia a notificação push para o dispositivo do profissional.
+    const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    await sendPushNotification(
+      supabaseAdmin,
+      adminId,
+      'Novo Agendamento!',
+      `${name} agendou um horário para ${formattedDate} às ${time}.`
+    );
 
 
     return new Response(JSON.stringify({ success: true }), {
