@@ -1440,13 +1440,18 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const handleLogout = async () => {
         const { error } = await supabase.auth.signOut();
-        if (error) {
+    
+        // O erro 'Auth session missing!' não é crítico para o logout.
+        // Significa que o usuário já está desconectado no servidor.
+        // Podemos prosseguir para recarregar a página e limpar o estado do cliente.
+        // Para quaisquer outros erros, ainda devemos alertar o usuário.
+        if (error && error.message !== 'Auth session missing!') {
             console.error("Error signing out:", error);
-            alert(`Ocorreu um erro ao tentar sair: ${error.message}. A página será recarregada para garantir que a sessão seja encerrada.`);
-            // A recarga forçada é uma medida de segurança para limpar o estado da aplicação
-            // caso a chamada de API para logout falhe, evitando que o usuário fique "preso".
-            window.location.reload();
+            alert(`Ocorreu um erro inesperado ao tentar sair: ${error.message}. A página será recarregada para garantir que a sessão seja encerrada.`);
         }
+    
+        // Sempre recarrega para garantir um estado limpo, o que efetivamente desconecta o usuário no cliente.
+        window.location.reload();
     };
 
 
