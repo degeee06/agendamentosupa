@@ -1,6 +1,8 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient, RealtimeChannel } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -8,21 +10,10 @@ import { Browser } from '@capacitor/browser';
 
 declare let jspdf: any;
 
-// As chaves agora são carregadas de forma segura a partir das variáveis de ambiente.
-// Certifique-se de configurar VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e VITE_PRODUCTION_URL no seu ambiente de build (Vercel).
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
-  const missingVars = [
-    !SUPABASE_URL && "VITE_SUPABASE_URL",
-    !SUPABASE_ANON_KEY && "VITE_SUPABASE_ANON_KEY",
-    !PRODUCTION_URL && "VITE_PRODUCTION_URL"
-  ].filter(Boolean).join(', ');
-  throw new Error(`Variáveis de ambiente ausentes: ${missingVars}. Por favor, configure-as no seu arquivo .env ou nas configurações do seu provedor de hospedagem.`);
-}
-
+const SUPABASE_URL = 'https://ehosmvbealefukkbqggp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVob3NtdmJlYWxlZnVra2JxZ2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjIzMDgsImV4cCI6MjA3NzU5ODMwOH0.IKqwxawiPnZT__Djj6ISgnQOawKnbboJ1TfqhSTf89M';
+// IMPORTANTE: Substitua pela URL de produção real do seu aplicativo para que os links públicos funcionem.
+const PRODUCTION_URL = 'https://oubook.vercel.app';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Tipos
@@ -144,16 +135,8 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
 };
 
-// FIX: Extracted props to a separate type to resolve an issue where TypeScript incorrectly flagged the 'key' prop as an error when mapping over the component.
-type AppointmentCardProps = {
-    appointment: Appointment;
-    onUpdateStatus: (id: string, status: Appointment['status']) => Promise<void>;
-    onDelete: (id: string) => Promise<void>;
-};
-
 // FIX: Updated prop types for onUpdateStatus and onDelete to correctly handle async functions (which return a Promise).
-// FIX: Explicitly typed the component with React.FC to resolve a TypeScript error related to the 'key' prop when mapping over the component.
-const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, onUpdateStatus, onDelete }) => {
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: { appointment: Appointment; onUpdateStatus: (id: string, status: Appointment['status']) => Promise<void>; onDelete: (id: string) => Promise<void>; }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
         <button 
@@ -1122,7 +1105,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     }, []);
 
     const fetchDashboardData = useCallback(async () => {
-        // Não definir isLoading aqui para evitar piscar na tela com o realtime
+        setIsLoading(true);
         try {
             const [appointmentsRes, businessProfileRes] = await Promise.all([
                 supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('time', { ascending: false }),
@@ -1153,59 +1136,15 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             console.error("Erro ao buscar dados do dashboard:", error);
             setError("Não foi possível carregar os dados.");
         } finally {
-            setIsLoading(false); // Definir como falso apenas no final do fetch inicial
+            setIsLoading(false);
         }
     }, [user.id]);
 
     useEffect(() => {
-        if (!user.id) return;
-    
-        // 1. Fetch inicial dos dados
         fetchDashboardData();
-    
-        // 2. Assinatura para mudanças diretas no banco de dados (updates, deletes)
-        const dbChangesChannel = supabase
-            .channel(`db-changes-for-${user.id}`)
-            .on<Appointment>(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` },
-                (payload) => {
-                    if (payload.eventType === 'INSERT') {
-                        setAppointments(prev => {
-                            if (prev.some(app => app.id === payload.new.id)) return prev;
-                            return [payload.new, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
-                        });
-                    }
-                    if (payload.eventType === 'UPDATE') {
-                        setAppointments(prev => prev.map(app => app.id === payload.new.id ? payload.new : app));
-                    }
-                    if (payload.eventType === 'DELETE') {
-                         setAppointments(prev => prev.filter(app => app.id !== (payload.old as { id: string }).id));
-                    }
-                }
-            )
-            .subscribe();
-    
-        // 3. Assinatura para broadcasts de Edge Functions (novos agendamentos públicos)
-        const broadcastChannel = supabase
-            .channel(`dashboard-${user.id}`)
-            .on('broadcast', { event: 'new_public_appointment' }, ({ payload }) => {
-                const newAppointment = payload as Appointment;
-                if (newAppointment) {
-                    setAppointments(prev => {
-                        if (prev.some(app => app.id === newAppointment.id)) return prev;
-                        return [newAppointment, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
-                    });
-                }
-            })
-            .subscribe();
-    
-        // 4. Função de limpeza
-        return () => {
-            supabase.removeChannel(dbChangesChannel);
-            supabase.removeChannel(broadcastChannel);
-        };
-    }, [user.id, fetchDashboardData]);
+        const intervalId = setInterval(fetchDashboardData, 30000); // Polling
+        return () => clearInterval(intervalId);
+    }, [fetchDashboardData]);
 
     const filteredAppointments = useMemo(() => {
         return appointments
@@ -1225,7 +1164,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             return;
         }
 
-        const { data: newAppointment, error } = await supabase
+        const { data, error } = await supabase
             .from('appointments')
             .insert({ name, phone, email, date, time, user_id: user.id })
             .select()
@@ -1234,15 +1173,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         if (error) {
             console.error('Erro ao salvar:', error);
             throw error;
-        } else {
-            // Atualiza o estado local imediatamente para uma UI reativa.
-            // O Realtime cuidará dos outros clientes, e a prevenção de duplicidade já foi adicionada.
-            if (newAppointment) {
-                setAppointments(prev => 
-                    [newAppointment, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time))
-                );
-            }
-            // A atualização do perfil de uso ainda é necessária.
+        } else if (data) {
+            setAppointments(prev => [data, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time)));
             if (profile.plan === 'trial') {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
@@ -1316,27 +1248,18 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
-        // 1. Salva o estado original para um possível rollback.
-        const originalAppointments = [...appointments];
-    
-        // 2. Aplica a atualização otimista na UI imediatamente.
-        setAppointments(prev => 
-            prev.map(app => app.id === id ? { ...app, status } : app)
-        );
-    
-        // 3. Realiza a operação no banco de dados em segundo plano.
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('appointments')
             .update({ status })
-            .eq('id', id);
-    
-        // 4. Lida com erros e reverte a alteração se necessário.
+            .eq('id', id)
+            .select()
+            .single();
+
         if (error) {
-            console.error("Erro ao atualizar status, revertendo:", error);
-            alert("Não foi possível atualizar o status. A alteração foi desfeita.");
-            setAppointments(originalAppointments);
+            console.error("Erro ao atualizar status:", error);
+        } else if (data) {
+            setAppointments(prev => prev.map(app => app.id === id ? data : app));
         }
-        // Em caso de sucesso, não faz nada, pois a UI já está atualizada.
     };
 
     const handleDeleteAppointment = async (id: string) => {
@@ -1349,8 +1272,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     
             if (error) {
                 console.error("Erro ao excluir agendamento:", error);
+                // Você pode adicionar um alerta para o usuário aqui, se desejar
             } else {
-                // Atualiza a UI imediatamente após o sucesso da exclusão.
                 setAppointments(prev => prev.filter(app => app.id !== id));
             }
         }

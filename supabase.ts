@@ -4,8 +4,6 @@ declare global {
   interface ImportMetaEnv {
     readonly VITE_SUPABASE_URL: string;
     readonly VITE_SUPABASE_ANON_KEY: string;
-    // FIX: Add VITE_PRODUCTION_URL to the environment variable types to resolve a TypeScript error in index.tsx.
-    readonly VITE_PRODUCTION_URL: string;
   }
 
   interface ImportMeta {
