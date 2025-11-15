@@ -1087,6 +1087,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    
+    // State for pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const APPOINTMENTS_PAGE_SIZE = 20;
 
     const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
     const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
@@ -1126,12 +1132,21 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         // Não definir isLoading aqui para evitar piscar na tela com o realtime
         try {
             const [appointmentsRes, businessProfileRes] = await Promise.all([
-                supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('time', { ascending: false }),
+                supabase.from('appointments')
+                  .select('*')
+                  .eq('user_id', user.id)
+                  .order('date', { ascending: false })
+                  .order('time', { ascending: false })
+                  .range(0, APPOINTMENTS_PAGE_SIZE - 1),
                 supabase.from('business_profiles').select('*').eq('user_id', user.id).single()
             ]);
 
             if (appointmentsRes.error) throw appointmentsRes.error;
-            setAppointments(appointmentsRes.data || []);
+            
+            const fetchedAppointments = appointmentsRes.data || [];
+            setAppointments(fetchedAppointments);
+            setHasMore(fetchedAppointments.length === APPOINTMENTS_PAGE_SIZE);
+            setCurrentPage(1);
             
             const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
             const defaultStartTime = '09:00';
@@ -1157,6 +1172,37 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             setIsLoading(false); // Definir como falso apenas no final do fetch inicial
         }
     }, [user.id]);
+    
+    const handleLoadMore = async () => {
+        if (isLoadingMore || !hasMore) return;
+        setIsLoadingMore(true);
+    
+        const from = currentPage * APPOINTMENTS_PAGE_SIZE;
+        const to = from + APPOINTMENTS_PAGE_SIZE - 1;
+    
+        try {
+            const { data: newAppointments, error } = await supabase
+                .from('appointments')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('date', { ascending: false })
+                .order('time', { ascending: false })
+                .range(from, to);
+    
+            if (error) throw error;
+            
+            const fetchedAppointments = newAppointments || [];
+            setAppointments(prev => [...prev, ...fetchedAppointments]);
+            setHasMore(fetchedAppointments.length === APPOINTMENTS_PAGE_SIZE);
+            setCurrentPage(prev => prev + 1);
+    
+        } catch (error: any) {
+            console.error("Erro ao carregar mais agendamentos:", error);
+            setError("Não foi possível carregar mais agendamentos.");
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
 
     useEffect(() => {
         if (!user.id) return;
@@ -1613,6 +1659,17 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     {filteredAppointments.map(app => <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteAppointment}/>)}
                 </div>
              )}
+             {!isLoading && hasMore && (
+                <div className="mt-8 text-center">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={isLoadingMore}
+                        className="bg-gray-700/50 hover:bg-gray-600/50 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center mx-auto"
+                    >
+                        {isLoadingMore ? <LoaderIcon className="w-6 h-6" /> : 'Carregar Mais'}
+                    </button>
+                </div>
+            )}
           </div>
         </main>
 
