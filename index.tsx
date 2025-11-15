@@ -1232,14 +1232,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     
             PushNotifications.addListener('registration', async (token) => {
                 console.log('Push registration success, token:', token.value);
-                // Utiliza a Edge Function para registrar o token,
-                // garantindo que o token do dispositivo seja associado ao usuário logado no momento.
-                const { error } = await supabase.functions.invoke('register-push-token', {
-                    body: { token: token.value }
-                });
-
+                const { error } = await supabase.from('notification_tokens').upsert(
+                    { token: token.value, user_id: userId },
+                    { onConflict: 'token' }
+                );
                 if (error) {
-                    console.error('Erro ao registrar token de notificação via edge function:', error);
+                    console.error('Erro ao salvar token de notificação:', error);
                 }
             });
     
@@ -1438,20 +1436,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         doc.save("agendamentos.pdf");
     };
 
-    const handleLogout = async () => {
-        const { error } = await supabase.auth.signOut();
-    
-        if (error) {
-            // Apenas registra o erro no console para depuração. Não exibe um alerta para o usuário
-            // em casos comuns de falha de rede ou sessão já expirada.
-            console.error("Error signing out:", error);
-        }
-    
-        // Recarregar a página é uma maneira robusta de garantir que todo o estado do cliente seja limpo.
-        // A lógica de inicialização aprimorada cuidará de qualquer sessão inválida que possa ter permanecido.
-        window.location.reload();
-    };
-
 
     return (
       <div className="flex h-screen bg-black overflow-hidden">
@@ -1504,7 +1488,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         <p className="text-sm text-gray-400">{user.email}</p>
                     </div>
                 </div>
-                <button onClick={handleLogout} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 hover:text-red-300 p-3 rounded-lg transition-colors">
+                <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 hover:text-red-300 p-3 rounded-lg transition-colors">
                     <LogOutIcon className="w-5 h-5"/><span>Sair</span>
                 </button>
              </div>
@@ -1672,98 +1656,97 @@ const App = () => {
     }, []);
 
     useEffect(() => {
-        const syncUserAndProfile = async () => {
-            setIsLoading(true);
-            try {
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-                if (sessionError) throw sessionError;
-                if (!session) {
-                    // No session, user is logged out.
-                    setUser(null);
-                    setProfile(null);
+        const checkUser = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            const currentUser = session?.user ?? null;
+    
+            if (!currentUser) {
+                setIsLoading(false);
+                return;
+            }
+    
+            // Step 1: Fetch profile
+            let { data: userProfile, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentUser.id)
+                .single();
+            
+            // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
+            if (error && error.code === 'PGRST116') { 
+                const { data: newProfile, error: insertError } = await supabase
+                    .from('profiles')
+                    .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                    .select()
+                    .single();
+    
+                if (insertError) {
+                    console.error("Erro ao criar perfil:", insertError);
+                    setIsLoading(false);
                     return;
                 }
-                const currentUser = session.user;
-        
-                // Step 1: Fetch profile. This is the main validation point.
-                // If this fails (e.g., with a 406 error), the session is considered invalid.
-                let { data: userProfile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', currentUser.id)
-                    .single();
-                
-                // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
-                if (profileError && profileError.code === 'PGRST116') { 
-                    const { data: newProfile, error: insertError } = await supabase
-                        .from('profiles')
-                        .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
-                        .select()
-                        .single();
-        
-                    if (insertError) throw insertError; // Throw to main catch block
-                    userProfile = newProfile;
-                } else if (profileError) {
-                    throw profileError; // Throw any other profile fetch error to the catch block
-                }
-        
-                if (!userProfile) { // Safeguard
-                    throw new Error("User profile not found or could not be created.");
-                }
-        
-                // Step 3: Check for premium expiration
+                userProfile = newProfile;
+            } else if (error) {
+                console.error("Error fetching profile:", error);
+                setIsLoading(false);
+                return;
+            }
+    
+            // Step 3: Check for premium expiration
+            if (userProfile) {
                 const isPremium = userProfile.plan === 'premium';
                 const premiumExpired = isPremium && userProfile.premium_expires_at && new Date(userProfile.premium_expires_at) < new Date();
-        
+    
                 if (premiumExpired) {
-                    const { data: revertedProfile } = await supabase
+                    const { data: revertedProfile, error: revertError } = await supabase
                         .from('profiles')
                         .update({ plan: 'trial', premium_expires_at: null })
                         .eq('id', currentUser.id)
                         .select()
                         .single();
-                    if (revertedProfile) userProfile = revertedProfile;
+                    
+                    if (revertError) {
+                        console.error("Error reverting expired plan:", revertError);
+                        userProfile.plan = 'trial'; 
+                    } else if (revertedProfile) {
+                        userProfile = revertedProfile;
+                    }
                 }
-        
+    
                 // Step 4: Check for daily usage reset for trial users
                 const today = new Date().toISOString().split('T')[0];
                 if (userProfile.plan === 'trial' && userProfile.last_usage_date !== today) {
-                    const { data: updatedProfile } = await supabase
+                    const { data: updatedProfile, error: updateError } = await supabase
                         .from('profiles')
                         .update({ daily_usage: 0, last_usage_date: today })
                         .eq('id', currentUser.id)
                         .select()
                         .single();
-                    if (updatedProfile) userProfile = updatedProfile;
+                    if (!updateError && updatedProfile) {
+                        userProfile = updatedProfile;
+                    }
                 }
-                
-                // Step 5: If all checks pass, set the user and profile state to logged-in
-                setUser({ id: currentUser.id, email: currentUser.email });
-                setProfile(userProfile);
-
-            } catch (error) {
-                // If any step fails, the session is invalid. Clear user state to force logout.
-                console.error("Failed to sync user profile; session is likely invalid.", error);
-                setUser(null);
-                setProfile(null);
-            } finally {
-                setIsLoading(false);
             }
+            
+            // Step 5: Set final state
+            setProfile(userProfile);
+            setUser({ id: currentUser.id, email: currentUser.email });
+            setIsLoading(false);
         };
       
-        // Initial check when the component mounts.
-        syncUserAndProfile();
+        checkUser();
 
-        const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-            // Re-sync profile on sign-in event.
-            if (event === 'SIGNED_IN') {
-                syncUserAndProfile();
+        const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+            const currentUser = session?.user ?? null;
+            if (currentUser) {
+                setUser({id: currentUser.id, email: currentUser.email});
                 if (localStorage.getItem('termsAccepted') !== 'true') {
                     localStorage.setItem('termsAccepted', 'true');
                 }
-            }
-            // Clear state on sign-out event.
-            if (event === 'SIGNED_OUT') {
+                if (!profile || profile.id !== currentUser.id) {
+                    checkUser();
+                }
+            } else {
                 setUser(null);
                 setProfile(null);
             }
