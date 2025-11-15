@@ -71,10 +71,15 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Insere o novo agendamento.
-    const { error: insertError } = await supabaseAdmin.from('appointments').insert({
-      name, email, phone, date, time, user_id: adminId, status: 'Pendente'
-    });
+    // 3. Insere o novo agendamento e retorna os dados.
+    const { data: newAppointment, error: insertError } = await supabaseAdmin
+      .from('appointments')
+      .insert({
+        name, email, phone, date, time, user_id: adminId, status: 'Pendente'
+      })
+      .select()
+      .single();
+
     if (insertError) throw insertError;
 
     // 4. Atualiza a contagem de uso se for um plano 'trial'.
@@ -101,6 +106,16 @@ serve(async (req: Request) => {
     if (updateLinkError) {
       console.error(`CRÍTICO: Falha ao marcar o link ${tokenId} como usado após o agendamento.`, updateLinkError);
     }
+
+    // 6. Envia uma notificação de broadcast para o dashboard do usuário.
+    // Isso é necessário porque a inserção com a chave de admin (service_role) não dispara o Realtime baseado em RLS.
+    const channel = supabaseAdmin.channel(`dashboard-${adminId}`);
+    await channel.send({
+      type: 'broadcast',
+      event: 'new_public_appointment',
+      payload: newAppointment,
+    });
+
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

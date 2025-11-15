@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
@@ -1166,37 +1163,47 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         // 1. Fetch inicial dos dados
         fetchDashboardData();
     
-        // 2. Configura a assinatura Realtime
-        const channel = supabase
-            .channel(`public:appointments:user_id=eq.${user.id}`)
+        // 2. Assinatura para mudanças diretas no banco de dados (updates, deletes)
+        const dbChangesChannel = supabase
+            .channel(`db-changes-for-${user.id}`)
             .on<Appointment>(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` },
                 (payload) => {
                     if (payload.eventType === 'INSERT') {
                         setAppointments(prev => {
-                            // Prevenção de duplicidade: só adiciona se o ID não existir na lista.
-                            if (prev.some(app => app.id === payload.new.id)) {
-                                return prev;
-                            }
-                            return [payload.new, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
+                            if (prev.some(app => app.id === payload.new.id)) return prev;
+                            return [payload.new, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
                         });
                     }
                     if (payload.eventType === 'UPDATE') {
-                        setAppointments(prev => 
-                            prev.map(app => app.id === payload.new.id ? payload.new : app)
-                        );
+                        setAppointments(prev => prev.map(app => app.id === payload.new.id ? payload.new : app));
                     }
                     if (payload.eventType === 'DELETE') {
-                        setAppointments(prev => prev.filter(app => app.id !== (payload.old as { id: string }).id));
+                         setAppointments(prev => prev.filter(app => app.id !== (payload.old as { id: string }).id));
                     }
                 }
             )
             .subscribe();
     
-        // 3. Função de limpeza para remover a assinatura quando o componente for desmontado
+        // 3. Assinatura para broadcasts de Edge Functions (novos agendamentos públicos)
+        const broadcastChannel = supabase
+            .channel(`dashboard-${user.id}`)
+            .on('broadcast', { event: 'new_public_appointment' }, ({ payload }) => {
+                const newAppointment = payload as Appointment;
+                if (newAppointment) {
+                    setAppointments(prev => {
+                        if (prev.some(app => app.id === newAppointment.id)) return prev;
+                        return [newAppointment, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
+                    });
+                }
+            })
+            .subscribe();
+    
+        // 4. Função de limpeza
         return () => {
-            supabase.removeChannel(channel);
+            supabase.removeChannel(dbChangesChannel);
+            supabase.removeChannel(broadcastChannel);
         };
     }, [user.id, fetchDashboardData]);
 
@@ -1323,7 +1330,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const handleDeleteAppointment = async (id: string) => {
         const isConfirmed = window.confirm('Tem certeza que deseja excluir este agendamento? Esta ação é permanente e não pode ser desfeita.');
         if (isConfirmed) {
-             // A exclusão agora é tratada automaticamente pelo Realtime.
             const { error } = await supabase
                 .from('appointments')
                 .delete()
@@ -1331,6 +1337,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     
             if (error) {
                 console.error("Erro ao excluir agendamento:", error);
+            } else {
+                // Atualiza a UI imediatamente após o sucesso da exclusão.
+                setAppointments(prev => prev.filter(app => app.id !== id));
             }
         }
     };
