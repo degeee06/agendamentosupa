@@ -1441,16 +1441,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const handleLogout = async () => {
         const { error } = await supabase.auth.signOut();
     
-        // O erro 'Auth session missing!' não é crítico para o logout.
-        // Significa que o usuário já está desconectado no servidor.
-        // Podemos prosseguir para recarregar a página e limpar o estado do cliente.
-        // Para quaisquer outros erros, ainda devemos alertar o usuário.
-        if (error && error.message !== 'Auth session missing!') {
+        if (error) {
+            // Apenas registra o erro no console para depuração. Não exibe um alerta para o usuário
+            // em casos comuns de falha de rede ou sessão já expirada.
             console.error("Error signing out:", error);
-            alert(`Ocorreu um erro inesperado ao tentar sair: ${error.message}. A página será recarregada para garantir que a sessão seja encerrada.`);
         }
     
-        // Sempre recarrega para garantir um estado limpo, o que efetivamente desconecta o usuário no cliente.
+        // Recarregar a página é uma maneira robusta de garantir que todo o estado do cliente seja limpo.
+        // A lógica de inicialização aprimorada cuidará de qualquer sessão inválida que possa ter permanecido.
         window.location.reload();
     };
 
@@ -1674,97 +1672,98 @@ const App = () => {
     }, []);
 
     useEffect(() => {
-        const checkUser = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            const currentUser = session?.user ?? null;
-    
-            if (!currentUser) {
-                setIsLoading(false);
-                return;
-            }
-    
-            // Step 1: Fetch profile
-            let { data: userProfile, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', currentUser.id)
-                .single();
-            
-            // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
-            if (error && error.code === 'PGRST116') { 
-                const { data: newProfile, error: insertError } = await supabase
-                    .from('profiles')
-                    .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
-                    .select()
-                    .single();
-    
-                if (insertError) {
-                    console.error("Erro ao criar perfil:", insertError);
-                    setIsLoading(false);
+        const syncUserAndProfile = async () => {
+            setIsLoading(true);
+            try {
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) throw sessionError;
+                if (!session) {
+                    // No session, user is logged out.
+                    setUser(null);
+                    setProfile(null);
                     return;
                 }
-                userProfile = newProfile;
-            } else if (error) {
-                console.error("Error fetching profile:", error);
-                setIsLoading(false);
-                return;
-            }
-    
-            // Step 3: Check for premium expiration
-            if (userProfile) {
+                const currentUser = session.user;
+        
+                // Step 1: Fetch profile. This is the main validation point.
+                // If this fails (e.g., with a 406 error), the session is considered invalid.
+                let { data: userProfile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', currentUser.id)
+                    .single();
+                
+                // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
+                if (profileError && profileError.code === 'PGRST116') { 
+                    const { data: newProfile, error: insertError } = await supabase
+                        .from('profiles')
+                        .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                        .select()
+                        .single();
+        
+                    if (insertError) throw insertError; // Throw to main catch block
+                    userProfile = newProfile;
+                } else if (profileError) {
+                    throw profileError; // Throw any other profile fetch error to the catch block
+                }
+        
+                if (!userProfile) { // Safeguard
+                    throw new Error("User profile not found or could not be created.");
+                }
+        
+                // Step 3: Check for premium expiration
                 const isPremium = userProfile.plan === 'premium';
                 const premiumExpired = isPremium && userProfile.premium_expires_at && new Date(userProfile.premium_expires_at) < new Date();
-    
+        
                 if (premiumExpired) {
-                    const { data: revertedProfile, error: revertError } = await supabase
+                    const { data: revertedProfile } = await supabase
                         .from('profiles')
                         .update({ plan: 'trial', premium_expires_at: null })
                         .eq('id', currentUser.id)
                         .select()
                         .single();
-                    
-                    if (revertError) {
-                        console.error("Error reverting expired plan:", revertError);
-                        userProfile.plan = 'trial'; 
-                    } else if (revertedProfile) {
-                        userProfile = revertedProfile;
-                    }
+                    if (revertedProfile) userProfile = revertedProfile;
                 }
-    
+        
                 // Step 4: Check for daily usage reset for trial users
                 const today = new Date().toISOString().split('T')[0];
                 if (userProfile.plan === 'trial' && userProfile.last_usage_date !== today) {
-                    const { data: updatedProfile, error: updateError } = await supabase
+                    const { data: updatedProfile } = await supabase
                         .from('profiles')
                         .update({ daily_usage: 0, last_usage_date: today })
                         .eq('id', currentUser.id)
                         .select()
                         .single();
-                    if (!updateError && updatedProfile) {
-                        userProfile = updatedProfile;
-                    }
+                    if (updatedProfile) userProfile = updatedProfile;
                 }
+                
+                // Step 5: If all checks pass, set the user and profile state to logged-in
+                setUser({ id: currentUser.id, email: currentUser.email });
+                setProfile(userProfile);
+
+            } catch (error) {
+                // If any step fails, the session is invalid. Clear user state to force logout.
+                console.error("Failed to sync user profile; session is likely invalid.", error);
+                setUser(null);
+                setProfile(null);
+            } finally {
+                setIsLoading(false);
             }
-            
-            // Step 5: Set final state
-            setProfile(userProfile);
-            setUser({ id: currentUser.id, email: currentUser.email });
-            setIsLoading(false);
         };
       
-        checkUser();
+        // Initial check when the component mounts.
+        syncUserAndProfile();
 
-        const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-            const currentUser = session?.user ?? null;
-            if (currentUser) {
-                setUser({id: currentUser.id, email: currentUser.email});
+        const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+            // Re-sync profile on sign-in event.
+            if (event === 'SIGNED_IN') {
+                syncUserAndProfile();
                 if (localStorage.getItem('termsAccepted') !== 'true') {
                     localStorage.setItem('termsAccepted', 'true');
                 }
-                if (!profile || profile.id !== currentUser.id) {
-                    checkUser();
-                }
-            } else {
+            }
+            // Clear state on sign-out event.
+            if (event === 'SIGNED_OUT') {
                 setUser(null);
                 setProfile(null);
             }
