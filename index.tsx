@@ -1316,15 +1316,27 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
-        // A atualização agora é tratada automaticamente pelo Realtime.
+        // 1. Salva o estado original para um possível rollback.
+        const originalAppointments = [...appointments];
+    
+        // 2. Aplica a atualização otimista na UI imediatamente.
+        setAppointments(prev => 
+            prev.map(app => app.id === id ? { ...app, status } : app)
+        );
+    
+        // 3. Realiza a operação no banco de dados em segundo plano.
         const { error } = await supabase
             .from('appointments')
             .update({ status })
             .eq('id', id);
-
+    
+        // 4. Lida com erros e reverte a alteração se necessário.
         if (error) {
-            console.error("Erro ao atualizar status:", error);
+            console.error("Erro ao atualizar status, revertendo:", error);
+            alert("Não foi possível atualizar o status. A alteração foi desfeita.");
+            setAppointments(originalAppointments);
         }
+        // Em caso de sucesso, não faz nada, pois a UI já está atualizada.
     };
 
     const handleDeleteAppointment = async (id: string) => {
