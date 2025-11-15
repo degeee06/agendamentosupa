@@ -1310,6 +1310,15 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     const handleSaveAppointment = async (name: string, phone: string, email: string, date: string, time: string) => {
         if (!profile) return;
+    
+        const isDuplicate = appointments.some(
+            app => app.date === date && app.time === time && app.status !== 'Cancelado'
+        );
+    
+        if (isDuplicate) {
+            alert('Aviso: Já existe um agendamento para esta data e horário. Por favor, escolha outro horário.');
+            return; 
+        }
         
         if (hasReachedLimit) {
             setIsUpgradeModalOpen(true);
