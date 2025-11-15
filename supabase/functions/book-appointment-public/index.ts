@@ -28,7 +28,7 @@ async function getAccessToken() {
     serviceAccount.private_key
       .replace('-----BEGIN PRIVATE KEY-----', '')
       .replace('-----END PRIVATE KEY-----', '')
-      .replace(/\n/g, '')
+      .replace(/\\n/g, '') // FIX: Correctly remove escaped newlines from the environment secret.
   );
   const privateKeyBuffer = new Uint8Array(privateKeyData.length);
   for (let i = 0; i < privateKeyData.length; i++) {

@@ -1232,12 +1232,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     
             PushNotifications.addListener('registration', async (token) => {
                 console.log('Push registration success, token:', token.value);
-                const { error } = await supabase.from('notification_tokens').upsert(
-                    { token: token.value, user_id: userId },
-                    { onConflict: 'token' }
-                );
+                // Utiliza a Edge Function para registrar o token,
+                // garantindo que o token do dispositivo seja associado ao usuário logado no momento.
+                const { error } = await supabase.functions.invoke('register-push-token', {
+                    body: { token: token.value }
+                });
+
                 if (error) {
-                    console.error('Erro ao salvar token de notificação:', error);
+                    console.error('Erro ao registrar token de notificação via edge function:', error);
                 }
             });
     
@@ -1436,6 +1438,17 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         doc.save("agendamentos.pdf");
     };
 
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error("Error signing out:", error);
+            alert(`Ocorreu um erro ao tentar sair: ${error.message}. A página será recarregada para garantir que a sessão seja encerrada.`);
+            // A recarga forçada é uma medida de segurança para limpar o estado da aplicação
+            // caso a chamada de API para logout falhe, evitando que o usuário fique "preso".
+            window.location.reload();
+        }
+    };
+
 
     return (
       <div className="flex h-screen bg-black overflow-hidden">
@@ -1488,7 +1501,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         <p className="text-sm text-gray-400">{user.email}</p>
                     </div>
                 </div>
-                <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 hover:text-red-300 p-3 rounded-lg transition-colors">
+                <button onClick={handleLogout} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 hover:text-red-300 p-3 rounded-lg transition-colors">
                     <LogOutIcon className="w-5 h-5"/><span>Sair</span>
                 </button>
              </div>
