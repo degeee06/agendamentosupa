@@ -18,9 +18,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    // Tenta pegar do URL (GET) ou do Body (POST via invoke do frontend)
+    let code, state;
+
     const url = new URL(req.url);
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // user_id do profissional
+    if (url.searchParams.get("code")) {
+        code = url.searchParams.get("code");
+        state = url.searchParams.get("state");
+    } else {
+        try {
+            const body = await req.json();
+            code = body.code;
+            state = body.state;
+        } catch (e) {
+            // Body vazio ou invalido
+        }
+    }
 
     if (!code || !state) {
       return new Response(JSON.stringify({ error: "Parâmetros 'code' ou 'state' ausentes." }), { 
@@ -40,7 +53,7 @@ serve(async (req) => {
         client_secret: MP_CLIENT_SECRET,
         grant_type: "authorization_code",
         code,
-        redirect_uri: REDIRECT_URL,
+        redirect_uri: REDIRECT_URL, // Deve ser igual ao VITE_MP_REDIRECT_URL
       }),
     });
 
@@ -72,9 +85,9 @@ serve(async (req) => {
         throw error;
     }
 
-    // Redireciona o usuário de volta para o app ou mostra mensagem de sucesso
-    return new Response("Conta Mercado Pago conectada com sucesso! Você pode fechar esta janela.", {
-      headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" },
+    return new Response(JSON.stringify({ success: true, message: "Conta conectada!" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (e: any) {
