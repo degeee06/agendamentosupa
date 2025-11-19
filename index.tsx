@@ -951,7 +951,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         validateLinkAndFetchData();
     }, [tokenId]);
     
-    // Escuta Realtime para confirmação de pagamento
+    // Escuta Realtime para confirmação de pagamento (pode falhar para anonimos com RLS restrito)
     useEffect(() => {
         if (!pendingAppointmentId) return;
 
@@ -971,6 +971,39 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
         return () => { supabase.removeChannel(channel); };
     }, [pendingAppointmentId]);
+
+    // NOVO: Polling automático enquanto o modal estiver aberto
+    useEffect(() => {
+        let intervalId: any;
+
+        if (paymentModalOpen && paymentData && pendingAppointmentId) {
+            const checkStatus = async () => {
+                try {
+                    // Chama o webhook manualmente apenas para verificar (silent check)
+                    const { data, error } = await supabase.functions.invoke('mp-webhook', {
+                        body: {
+                            id: paymentData.id.toString(),
+                            action: 'payment.updated'
+                        }
+                    });
+
+                    if (data && data.status === 'approved') {
+                        setPaymentModalOpen(false);
+                        setBookingCompleted(true);
+                    }
+                } catch (e) {
+                    // Ignora erros silenciosamente no polling para não atrapalhar o UX
+                }
+            };
+
+            // Verifica a cada 4 segundos
+            intervalId = setInterval(checkStatus, 4000);
+        }
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [paymentModalOpen, paymentData, pendingAppointmentId]);
 
     const handleManualVerification = async (paymentId: number) => {
         try {
