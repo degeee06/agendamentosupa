@@ -187,10 +187,11 @@ serve(async (req: Request) => {
     }
 
     // 3. Insere o novo agendamento e retorna os dados.
+    // Status corrigido para 'Aguardando Pagamento' para fluxo PIX
     const { data: newAppointment, error: insertError } = await supabaseAdmin
       .from('appointments')
       .insert({
-        name, email, phone, date, time, user_id: adminId, status: 'Pendente'
+        name, email, phone, date, time, user_id: adminId, status: 'Aguardando Pagamento'
       })
       .select()
       .single();
@@ -212,10 +213,11 @@ serve(async (req: Request) => {
       }
     }
     
-    // 5. Marca o link como utilizado.
+    // 5. Marca o link como utilizado E SALVA O APPOINTMENT_ID.
+    // Isso permite recuperar o fluxo se o usuário atualizar a página.
     const { error: updateLinkError } = await supabaseAdmin
       .from('one_time_links')
-      .update({ is_used: true })
+      .update({ is_used: true, appointment_id: newAppointment.id })
       .eq('id', tokenId);
     
     if (updateLinkError) {
@@ -230,17 +232,12 @@ serve(async (req: Request) => {
       payload: newAppointment,
     });
     
-    // 7. Envia a notificação push para o dispositivo do profissional.
-    const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    await sendPushNotification(
-      supabaseAdmin,
-      adminId,
-      'Novo Agendamento!',
-      `${name} agendou um horário para ${formattedDate} às ${time}.`
-    );
+    // NOTA: A notificação Push de "Novo Agendamento" ou "Pagamento Recebido" 
+    // será gerenciada pelo Webhook do Mercado Pago para evitar spam antes do pagamento.
+    // Porém, se quiser avisar que "Alguém iniciou um agendamento", pode deixar aqui.
+    // Por padrão, vamos deixar o webhook confirmar para evitar notificações de "falsos positivos".
 
-
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, appointment: newAppointment }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

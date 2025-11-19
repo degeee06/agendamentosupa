@@ -494,6 +494,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const [paymentData, setPaymentData] = useState<PaymentResponse | null>(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [appointmentId, setAppointmentId] = useState<string | null>(null);
+    const [recoveringSession, setRecoveringSession] = useState(false);
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
@@ -501,9 +502,10 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         const validateLinkAndFetchData = async () => {
             try {
                 setLinkStatus('loading');
+                // Agora selecionamos também o appointment_id para checar se há uma sessão pendente
                 const { data: linkData, error: linkError } = await supabase
                     .from('one_time_links')
-                    .select('user_id, is_used')
+                    .select('user_id, is_used, appointment_id')
                     .eq('id', tokenId)
                     .single();
 
@@ -511,9 +513,29 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                     setLinkStatus('invalid');
                     return;
                 }
+
+                // Se o link foi usado, verificamos se é um caso de pagamento pendente
                 if (linkData.is_used) {
-                    setLinkStatus('used');
-                    return;
+                    let recovered = false;
+                    if (linkData.appointment_id) {
+                         const { data: appt } = await supabase.from('appointments').select('*').eq('id', linkData.appointment_id).single();
+                         if (appt && appt.status === 'Aguardando Pagamento') {
+                             console.log("Sessão recuperada: aguardando pagamento");
+                             setRecoveringSession(true);
+                             setAppointmentId(appt.id);
+                             // Vamos prosseguir para carregar os dados do admin para mostrar o modal de pagamento
+                             // mas marcamos recovered = true para não setar 'used'
+                             recovered = true;
+                             // Preenchemos os dados básicos caso precise re-exibir algo de fundo, embora o modal vá cobrir
+                             setName(appt.name);
+                             setPhone(appt.phone || '');
+                         }
+                    }
+                    
+                    if (!recovered) {
+                        setLinkStatus('used');
+                        return;
+                    }
                 }
 
                 const currentAdminId = linkData.user_id;
@@ -530,10 +552,36 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 setAdminProfile(profileRes.data);
                 setAppointments(appointmentsRes.data || []);
                 
-                // Use business profile or defaults
-                setBusinessProfile(businessProfileRes.data || { user_id: currentAdminId, blocked_dates: [], blocked_times: {}, working_days: {}, start_time: '09:00', end_time: '17:00', service_price: 0 });
+                const bizProfile = businessProfileRes.data || { user_id: currentAdminId, blocked_dates: [], blocked_times: {}, working_days: {}, start_time: '09:00', end_time: '17:00', service_price: 0 };
+                setBusinessProfile(bizProfile);
 
                 setLinkStatus('valid');
+
+                // Se estamos recuperando a sessão, acionamos o pagamento agora que temos o perfil (preço)
+                if (recoveringSession && linkData.appointment_id && bizProfile.service_price) {
+                    // Re-gerar/Recuperar QR Code
+                    // Como não temos os dados originais de email/descrição aqui fácil sem outra query, usamos genéricos
+                    // O importante é que o ID do agendamento seja o mesmo para o Idempotency Key do MP funcionar ou o backend tratar
+                    setIsSaving(true);
+                    const { data: paymentRes, error: paymentError } = await supabase.functions.invoke('create-payment', {
+                        body: {
+                            amount: bizProfile.service_price,
+                            description: `Retomada de Pagamento`, 
+                            professionalId: currentAdminId,
+                            appointmentId: linkData.appointment_id,
+                            payerEmail: 'cliente@retomada.com' // Email genérico se não tivermos o original fácil, ou poderíamos ter buscado no appointment
+                        }
+                    });
+                    setIsSaving(false);
+
+                    if (!paymentError && paymentRes) {
+                        setPaymentData(paymentRes);
+                        setShowPaymentModal(true);
+                    } else {
+                        setMessage({ type: 'error', text: 'Erro ao recuperar dados de pagamento.' });
+                    }
+                }
+
             } catch (error) {
                 console.error('Erro ao buscar dados do admin:', error);
                 setLinkStatus('invalid');
