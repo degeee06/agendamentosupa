@@ -6,11 +6,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { PushNotifications } from '@capacitor/push-notifications';
 
-
-declare let jspdf: any;
-
 // As chaves agora são carregadas de forma segura a partir das variáveis de ambiente.
-// Certifique-se de configurar VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e VITE_PRODUCTION_URL no seu ambiente de build (Vercel).
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
@@ -18,15 +14,10 @@ const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 const MP_CLIENT_ID = import.meta.env.VITE_MP_CLIENT_ID; 
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
-  const missingVars = [
-    !SUPABASE_URL && "VITE_SUPABASE_URL",
-    !SUPABASE_ANON_KEY && "VITE_SUPABASE_ANON_KEY",
-    !PRODUCTION_URL && "VITE_PRODUCTION_URL"
-  ].filter(Boolean).join(', ');
-  throw new Error(`Variáveis de ambiente ausentes: ${missingVars}. Por favor, configure-as no seu arquivo .env ou nas configurações do seu provedor de hospedagem.`);
+  console.error("Variáveis de ambiente ausentes. Verifique seu .env ou configurações do Vercel.");
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '');
 
 // Tipos
 type Appointment = {
@@ -74,7 +65,6 @@ type AssistantMessage = {
 const parseDateAsUTC = (dateString: string): Date => {
     if (!dateString) return new Date();
     const [year, month, day] = dateString.split('-').map(Number);
-    // Month is 0-indexed for Date.UTC
     return new Date(Date.UTC(year, month - 1, day));
 };
 
@@ -149,15 +139,12 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   return <span className={`${baseClasses} ${statusClasses[status] || statusClasses.Pendente}`}>{status}</span>;
 };
 
-// FIX: Extracted props to a separate type to resolve an issue where TypeScript incorrectly flagged the 'key' prop as an error when mapping over the component.
 type AppointmentCardProps = {
     appointment: Appointment;
     onUpdateStatus: (id: string, status: Appointment['status']) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
 };
 
-// FIX: Updated prop types for onUpdateStatus and onDelete to correctly handle async functions (which return a Promise).
-// FIX: Explicitly typed the component with React.FC to resolve a TypeScript error related to the 'key' prop when mapping over the component.
 const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, onUpdateStatus, onDelete }) => {
     return (
       <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
@@ -217,7 +204,6 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, onUpdate
     );
 };
 
-// FIX: Made children prop optional to resolve TypeScript errors in wrapper components.
 const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: boolean, onClose: () => void, title: string, children?: React.ReactNode, size?: 'md' | 'lg' | 'xl' }) => {
     const sizeClasses = {
         md: 'max-w-md',
@@ -343,7 +329,6 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Reset state when modal is closed
         if (!isOpen) {
             setGeneratedLink(null);
             setCopied(false);
@@ -480,16 +465,9 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             return;
         }
         // Use SUPABASE_URL to construct the redirect URI pointing directly to the edge function
-        // This avoids issues where PRODUCTION_URL points to Vercel/Frontend
         const baseUrl = SUPABASE_URL.replace(/\/$/, '');
         const redirectUri = `${baseUrl}/functions/v1/mercadopago-connect`;
         
-        // Log para ajudar no debug
-        console.log("Iniciando conexão MP com:", {
-            clientId: MP_CLIENT_ID,
-            redirectUri: redirectUri
-        });
-
         // Constrói URL de autorização
         const url = `https://auth.mercadopago.com.br/authorization?client_id=${MP_CLIENT_ID}&response_type=code&platform_id=mp&state=${userId}&redirect_uri=${redirectUri}`;
         
@@ -503,7 +481,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                 clearInterval(interval);
             }
         }, 3000);
-        // Stop polling after 2 minutes
         setTimeout(() => clearInterval(interval), 120000);
     };
 
@@ -562,8 +539,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         <Modal isOpen={isOpen} onClose={onClose} title="Configurações do Perfil" size="lg">
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
-                    
-                     {/* Mercado Pago Connection */}
                      <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -584,7 +559,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                         </div>
                     </div>
 
-                    {/* Working Hours */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-3">Horário de Funcionamento</h3>
                         <div className="flex items-center space-x-4">
@@ -598,7 +572,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                             </div>
                         </div>
                     </div>
-                    {/* Working Days */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-3">Dias de Funcionamento</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -615,7 +588,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                             ))}
                         </div>
                     </div>
-                    {/* Blocked Dates */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-2">Bloquear Datas Específicas</h3>
                         <div className="flex space-x-2">
@@ -631,8 +603,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                             ))}
                         </ul>
                     </div>
-
-                    {/* Blocked Times */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-2">Bloquear Horários Recorrentes</h3>
                         <div className="flex space-x-2 mb-2">
@@ -855,7 +825,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 
                 setAdminProfile(profileRes.data);
                 setAppointments(appointmentsRes.data || []);
-                setAdminHasMP(!!mpRes.data); // Check if admin has MP connected
+                setAdminHasMP(!!mpRes.data);
                 
                 const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
                 const defaultStartTime = '09:00';
@@ -879,7 +849,6 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         validateLinkAndFetchData();
     }, [tokenId]);
     
-    // Payment status polling
     useEffect(() => {
         if (!paymentModalOpen || !paymentData?.id) return;
         
@@ -963,7 +932,6 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         const dateString = selectedDate.toISOString().split('T')[0];
 
         try {
-            // 1. Create the appointment (Pending)
             const { data: appointmentRes, error: bookError } = await supabase.functions.invoke('book-appointment-public', {
                 body: {
                     tokenId: tokenId,
@@ -980,14 +948,13 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 throw new Error(errorMessage);
             }
             
-            // 2. If admin has MP, initiate payment
             if (adminHasMP) {
                 const { data: appointmentData } = await supabase.from('appointments').select('id').eq('date', dateString).eq('time', selectedTime).eq('user_id', adminId).single();
                 
                 if (appointmentData) {
                     const { data: payData, error: payError } = await supabase.functions.invoke('create-payment', {
                         body: {
-                            amount: 10.00, // TODO: Allow dynamic price setting by admin
+                            amount: 10.00, 
                             description: `Agendamento com ${name}`,
                             professionalId: adminId,
                             appointmentId: appointmentData.id,
@@ -997,13 +964,11 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                     
                     if (payError || !payData) {
                         console.error("Payment creation failed", payError);
-                        // Don't fail the whole booking, just alert
                         alert("Agendamento realizado, mas houve um erro ao gerar o Pix. O pagamento deverá ser feito no local.");
                         setBookingCompleted(true);
                     } else {
                         setPaymentData(payData);
                         setPaymentModalOpen(true);
-                        // Do not setBookingCompleted yet, wait for payment
                     }
                 } else {
                     setBookingCompleted(true);
@@ -1055,7 +1020,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             }
             
             days.push(
-                <button key={day} onClick={() => handleDateSelect(date)} disabled={!isAvailable} className={classes}>
+                <button key={day} type="button" onClick={() => handleDateSelect(date)} disabled={!isAvailable} className={classes}>
                     {day}
                 </button>
             );
@@ -1064,9 +1029,9 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         return (
             <div className="bg-black/20 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
-                    <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeftIcon className="w-5 h-5 text-white"/></button>
+                    <button type="button" onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeftIcon className="w-5 h-5 text-white"/></button>
                     <h3 className="font-bold text-white text-lg">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
-                    <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
+                    <button type="button" onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
                 </div>
                 <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
                     {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
@@ -1148,3 +1113,270 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                 ) : (
                                     <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
                                 )}
+                            </div>
+                        )}
+                        
+                        <button 
+                            type="submit" 
+                            disabled={isSaving || !selectedDate || !selectedTime}
+                            className="w-full bg-white text-black font-bold py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 mt-6"
+                        >
+                            {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <PaymentModal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} paymentData={paymentData} />
+        </div>
+    );
+};
+
+// --- Auth Component ---
+const Auth = ({ onLogin }: { onLogin: () => void }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        try {
+            if (isSignUp) {
+                const { error } = await supabase.auth.signUp({ email, password });
+                if (error) throw error;
+                alert('Cadastro realizado! Verifique seu email para confirmar.');
+            } else {
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                onLogin();
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-black flex justify-center items-center p-4">
+            <div className="glassmorphism rounded-2xl p-8 w-full max-w-md">
+                <h1 className="text-3xl font-bold text-white mb-6 text-center">Oubook</h1>
+                <form onSubmit={handleAuth} className="space-y-4">
+                    <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                    <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                    {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+                    <button type="submit" disabled={loading} className="w-full bg-white text-black font-bold py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50">
+                        {loading ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (isSignUp ? 'Cadastrar' : 'Entrar')}
+                    </button>
+                </form>
+                <button onClick={() => setIsSignUp(!isSignUp)} className="w-full mt-4 text-gray-400 text-sm hover:text-white">
+                    {isSignUp ? 'Já tem conta? Entrar' : 'Não tem conta? Cadastre-se'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// --- Dashboard Component ---
+const Dashboard = ({ user }: { user: User }) => {
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+    const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
+    const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([{ sender: 'ai', text: 'Olá! Sou sua assistente virtual. Como posso ajudar com seus agendamentos hoje?' }]);
+    const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+    const [profile, setProfile] = useState<Profile | null>(null);
+
+    const fetchAppointments = useCallback(async () => {
+        const { data } = await supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: true });
+        if (data) setAppointments(data);
+    }, [user.id]);
+
+    const fetchProfile = useCallback(async () => {
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (data) {
+            setProfile(data);
+            if (!data.terms_accepted_at) setIsTermsModalOpen(true);
+        }
+    }, [user.id]);
+
+    useEffect(() => {
+        Promise.all([fetchAppointments(), fetchProfile()]).then(() => setLoading(false));
+        
+        const channel = supabase.channel(`dashboard-${user.id}`)
+            .on('broadcast', { event: 'new_public_appointment' }, (payload) => {
+                setAppointments(prev => [...prev, payload.payload].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+                new Notification('Novo Agendamento', { body: `${payload.payload.name} agendou para ${payload.payload.date}` });
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [user.id, fetchAppointments, fetchProfile]);
+    
+    useEffect(() => {
+        if (Capacitor.isNativePlatform()) {
+            PushNotifications.requestPermissions().then(result => {
+                if (result.receive === 'granted') PushNotifications.register();
+            });
+            PushNotifications.addListener('registration', (token) => {
+                supabase.functions.invoke('register-push-token', { body: { token: token.value } });
+            });
+        }
+    }, []);
+
+    const handleCreateAppointment = async (name: string, phone: string, email: string, date: string, time: string) => {
+        if (profile?.plan === 'trial') {
+            const today = new Date().toISOString().split('T')[0];
+            if (profile.last_usage_date === today && profile.daily_usage >= 5) {
+                setIsUpgradeModalOpen(true);
+                return;
+            }
+        }
+        const { data, error } = await supabase.from('appointments').insert({ user_id: user.id, name, phone, email, date, time, status: 'Confirmado' }).select().single();
+        if (!error && data) {
+            setAppointments(prev => [...prev, data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+            fetchProfile();
+        } else {
+             alert('Erro ao criar agendamento.');
+        }
+    };
+
+    const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
+        const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
+        if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    };
+
+    const handleDelete = async (id: string) => {
+        if (confirm('Tem certeza que deseja excluir?')) {
+            const { error } = await supabase.from('appointments').delete().eq('id', id);
+            if (!error) setAppointments(prev => prev.filter(a => a.id !== id));
+        }
+    };
+    
+    const handleSendMessageToAssistant = async (text: string) => {
+        setAssistantMessages(prev => [...prev, { sender: 'user', text }]);
+        setIsAssistantLoading(true);
+        try {
+            // Contexto básico dos agendamentos atuais
+            const context = appointments.map(a => `${a.date} ${a.time}: ${a.name} (${a.status})`).join('\n');
+            const currentDate = new Date().toISOString();
+
+            const { data, error } = await supabase.functions.invoke('deepseek-assistant', {
+                body: { 
+                    messages: [{ role: 'user', content: text }],
+                    context: context,
+                    currentDate: currentDate
+                }
+            });
+            
+            if (error) throw error;
+            
+            const aiResponse = data.choices[0].message;
+            
+            // Se a IA decidiu chamar uma função (criar agendamento)
+            if (aiResponse.tool_calls) {
+                 for (const toolCall of aiResponse.tool_calls) {
+                    if (toolCall.function.name === 'create_appointment') {
+                        const args = JSON.parse(toolCall.function.arguments);
+                        await handleCreateAppointment(args.name, args.phone || '', args.email || '', args.date, args.time);
+                        setAssistantMessages(prev => [...prev, { sender: 'system', text: `✅ Agendamento criado para ${args.name} em ${args.date} às ${args.time}.` }]);
+                    }
+                 }
+            } else {
+                 setAssistantMessages(prev => [...prev, { sender: 'ai', text: aiResponse.content }]);
+            }
+
+        } catch (err) {
+            console.error(err);
+            setAssistantMessages(prev => [...prev, { sender: 'system', text: 'Desculpe, tive um erro ao processar seu pedido.' }]);
+        } finally {
+            setIsAssistantLoading(false);
+        }
+    };
+
+    if (loading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+
+    return (
+        <div className="min-h-screen bg-black text-white p-4 sm:p-6">
+            <header className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-2xl font-bold">Olá, Profissional</h1>
+                    <p className="text-gray-400 text-sm">Gerencie seus agendamentos</p>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => setIsAssistantModalOpen(true)} className="bg-purple-600 p-2 rounded-full hover:bg-purple-500"><BotIcon className="w-5 h-5" /></button>
+                    <button onClick={() => setIsProfileModalOpen(true)} className="bg-gray-800 p-2 rounded-full hover:bg-gray-700"><SettingsIcon className="w-5 h-5" /></button>
+                    <button onClick={() => supabase.auth.signOut()} className="bg-red-900/50 p-2 rounded-full hover:bg-red-800"><LogOutIcon className="w-5 h-5" /></button>
+                </div>
+            </header>
+
+            <div className="grid grid-cols-2 gap-4 mb-8">
+                <button onClick={() => setIsNewModalOpen(true)} className="bg-gray-200 text-black p-4 rounded-2xl font-bold hover:bg-white transition flex items-center justify-center gap-2">
+                    <PlusIcon className="w-5 h-5" /> Novo
+                </button>
+                <button onClick={() => setIsLinkModalOpen(true)} className="glassmorphism p-4 rounded-2xl font-bold hover:bg-white/10 transition flex items-center justify-center gap-2">
+                    <LinkIcon className="w-5 h-5" /> Link
+                </button>
+            </div>
+
+            <div className="space-y-4">
+                <h2 className="text-xl font-bold mb-4">Próximos Agendamentos</h2>
+                {appointments.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">Nenhum agendamento encontrado.</p>
+                ) : (
+                    appointments.map(app => (
+                        <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                    ))
+                )}
+            </div>
+            
+            <NewAppointmentModal isOpen={isNewModalOpen} onClose={() => setIsNewModalOpen(false)} onSave={handleCreateAppointment} user={user} />
+            <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
+            <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} userId={user.id} />
+            <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={5} />
+            <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} />
+            <AssistantModal isOpen={isAssistantModalOpen} onClose={() => setIsAssistantModalOpen(false)} messages={assistantMessages} onSendMessage={handleSendMessageToAssistant} isLoading={isAssistantLoading} />
+        </div>
+    );
+};
+
+// --- Main App Component ---
+const App = () => {
+    const [session, setSession] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [path, setPath] = useState(window.location.pathname);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setLoading(false);
+        });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+        return () => subscription.unsubscribe();
+    }, []);
+
+    if (loading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+
+    // Roteamento simples baseado na URL
+    if (path.startsWith('/book-link/')) {
+        const tokenId = path.split('/book-link/')[1];
+        return <PaginaDeAgendamento tokenId={tokenId} />;
+    }
+
+    return session ? <Dashboard user={session.user} /> : <Auth onLogin={() => {}} />;
+};
+
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
+}
