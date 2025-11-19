@@ -239,9 +239,11 @@ serve(async (req: Request) => {
       `${name} agendou um horário para ${formattedDate} às ${time}.`
     );
 
-
-    // IMPORTANTE: Retornamos o ID do agendamento para que o frontend possa gerar o pagamento.
-    return new Response(JSON.stringify({ success: true, appointmentId: newAppointment.id }), {
+    // 8. RETORNO ATUALIZADO: Inclui o ID do agendamento para o frontend poder iniciar o pagamento
+    return new Response(JSON.stringify({ 
+      success: true, 
+      appointmentId: newAppointment.id 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

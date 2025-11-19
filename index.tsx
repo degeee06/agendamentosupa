@@ -967,7 +967,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
             // 2. Check if payment is required
             if (requiresPayment && businessProfile?.service_price && businessProfile.service_price > 0) {
-                const appointmentId = appData.appointmentId; // Make sure the Edge Function returns this!
+                const appointmentId = appData.appointmentId; 
                 if (!appointmentId) throw new Error("Erro ao iniciar pagamento: ID do agendamento não retornado.");
                 
                 setPendingAppointmentId(appointmentId);
