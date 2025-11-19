@@ -186,8 +186,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Insere o novo agendamento e retorna os dados.
-    // Status corrigido para 'Aguardando Pagamento' para fluxo PIX
+    // 3. Insere o novo agendamento com status 'Aguardando Pagamento'.
     const { data: newAppointment, error: insertError } = await supabaseAdmin
       .from('appointments')
       .insert({
@@ -208,16 +207,17 @@ serve(async (req: Request) => {
         .eq('id', adminId);
       
       if (updateProfileError) {
-        // Erro não-crítico para o usuário final, mas deve ser logado.
         console.error(`CRÍTICO: Falha ao atualizar o uso para ${adminId} após o agendamento.`, updateProfileError);
       }
     }
     
-    // 5. Marca o link como utilizado E SALVA O APPOINTMENT_ID.
-    // Isso permite recuperar o fluxo se o usuário atualizar a página.
+    // 5. Marca o link como utilizado E vincula o appointment_id para recuperação.
     const { error: updateLinkError } = await supabaseAdmin
       .from('one_time_links')
-      .update({ is_used: true, appointment_id: newAppointment.id })
+      .update({ 
+        is_used: true,
+        appointment_id: newAppointment.id // CRÍTICO: Salva o ID para permitir recuperação se o pagamento falhar
+      })
       .eq('id', tokenId);
     
     if (updateLinkError) {
@@ -232,10 +232,15 @@ serve(async (req: Request) => {
       payload: newAppointment,
     });
     
-    // NOTA: A notificação Push de "Novo Agendamento" ou "Pagamento Recebido" 
-    // será gerenciada pelo Webhook do Mercado Pago para evitar spam antes do pagamento.
-    // Porém, se quiser avisar que "Alguém iniciou um agendamento", pode deixar aqui.
-    // Por padrão, vamos deixar o webhook confirmar para evitar notificações de "falsos positivos".
+    // NOTA: O push notification agora é enviado preferencialmente pelo webhook de pagamento confirmado.
+    // Mas mantemos aqui como "Novo Agendamento Pendente".
+    const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    await sendPushNotification(
+      supabaseAdmin,
+      adminId,
+      'Novo Agendamento (Pendente)',
+      `${name} iniciou um agendamento para ${formattedDate} às ${time}. Aguardando pagamento.`
+    );
 
     return new Response(JSON.stringify({ success: true, appointment: newAppointment }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
