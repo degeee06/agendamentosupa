@@ -14,6 +14,8 @@ declare let jspdf: any;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
+// Client ID do Mercado Pago (Público) para o botão de conectar
+const MP_CLIENT_ID = import.meta.env.VITE_MP_CLIENT_ID; 
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
   const missingVars = [
@@ -35,7 +37,7 @@ type Appointment = {
   phone?: string;
   date: string;
   time: string;
-  status: 'Pendente' | 'Confirmado' | 'Cancelado';
+  status: 'Pendente' | 'Confirmado' | 'Cancelado' | 'Pago';
   user_id: string;
 };
 
@@ -132,6 +134,7 @@ const BotIcon = (props: any) => <Icon {...props}><path d="M12 8V4H8" /><rect x="
 const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></Icon>;
 const ChatBubbleIcon = (props: any) => <Icon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></Icon>;
 const MenuIcon = (props: any) => <Icon {...props}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></Icon>;
+const DollarSignIcon = (props: any) => <Icon {...props}><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></Icon>;
 
 
 // --- Componentes de UI ---
@@ -141,8 +144,9 @@ const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
     Pendente: "bg-yellow-500/20 text-yellow-300",
     Confirmado: "bg-green-500/20 text-green-300",
     Cancelado: "bg-red-500/20 text-red-300",
+    Pago: "bg-blue-500/20 text-blue-300",
   };
-  return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
+  return <span className={`${baseClasses} ${statusClasses[status] || statusClasses.Pendente}`}>{status}</span>;
 };
 
 // FIX: Extracted props to a separate type to resolve an issue where TypeScript incorrectly flagged the 'key' prop as an error when mapping over the component.
@@ -194,6 +198,12 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, onUpdate
                     <span>Confirmar</span>
                 </button>
               )}
+               {appointment.status === 'Pago' && (
+                <div className="w-full flex justify-center items-center space-x-2 bg-blue-500/20 text-blue-300 font-semibold py-2 px-4 rounded-lg">
+                    <CheckCircleIcon className="w-4 h-4" />
+                    <span>Pago via Pix</span>
+                </div>
+              )}
               <button
                   onClick={() => onUpdateStatus(appointment.id, 'Cancelado')}
                   className="w-full flex justify-center items-center space-x-2 bg-red-500/20 hover:bg-red-500/40 text-red-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300"
@@ -226,7 +236,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
                     <XIcon className="w-6 h-6" />
                 </button>
-                <h2 className="text-2xl font-bold text-white mb-6">{title}</h2>
+                <h2 className="text-2xl font-bold text-white mb-6 pr-8">{title}</h2>
                 {children}
             </div>
         </div>
@@ -267,6 +277,61 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Agendamento'}
                 </button>
             </form>
+        </Modal>
+    );
+};
+
+const PaymentModal = ({ isOpen, onClose, paymentData }: { isOpen: boolean, onClose: () => void, paymentData: any }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        if (paymentData?.qr_code) {
+            navigator.clipboard.writeText(paymentData.qr_code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    if (!paymentData) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Pagamento via Pix">
+            <div className="flex flex-col items-center space-y-6 text-center">
+                <p className="text-gray-300">
+                    Escaneie o QR Code abaixo ou copie o código Pix para pagar.
+                </p>
+                
+                {paymentData.qr_code_base64 ? (
+                    <div className="bg-white p-4 rounded-xl">
+                        <img src={`data:image/png;base64,${paymentData.qr_code_base64}`} alt="QR Code Pix" className="w-48 h-48" />
+                    </div>
+                ) : (
+                    <div className="w-48 h-48 bg-gray-700 rounded-xl flex items-center justify-center animate-pulse">
+                        <LoaderIcon className="w-8 h-8" />
+                    </div>
+                )}
+
+                <div className="w-full space-y-2">
+                    <p className="text-sm text-gray-400">Pix Copia e Cola</p>
+                    <div className="flex items-center space-x-2 bg-black/30 p-3 rounded-lg border border-gray-600">
+                        <input type="text" value={paymentData.qr_code} readOnly className="bg-transparent text-white w-full outline-none text-xs font-mono truncate" />
+                        <button onClick={handleCopy} className="text-gray-400 hover:text-white p-1">
+                            {copied ? <CheckCircleIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+                        </button>
+                    </div>
+                    <button 
+                        onClick={handleCopy}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition-colors mt-2"
+                    >
+                        {copied ? 'Copiado!' : 'Copiar Código Pix'}
+                    </button>
+                </div>
+
+                <div className="text-xs text-yellow-400/80 flex items-center gap-2 bg-yellow-500/10 p-3 rounded-lg w-full text-left">
+                    <AlertCircleIcon className="w-4 h-4 flex-shrink-0" />
+                    <span>O agendamento será confirmado automaticamente assim que o pagamento for identificado.</span>
+                </div>
+            </div>
         </Modal>
     );
 };
@@ -363,6 +428,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     const [newBlockedDate, setNewBlockedDate] = useState('');
     const [newBlockedTime, setNewBlockedTime] = useState('');
     const [selectedDay, setSelectedDay] = useState('monday');
+    const [mpConnected, setMpConnected] = useState(false);
 
     const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
     const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
@@ -373,19 +439,24 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         if (isOpen) {
             const fetchProfile = async () => {
                 setIsLoading(true);
-                const { data, error } = await supabase.from('business_profiles').select('*').eq('user_id', userId).single();
-                if (data) {
+                const [profileRes, mpRes] = await Promise.all([
+                     supabase.from('business_profiles').select('*').eq('user_id', userId).single(),
+                     supabase.from('mp_connections').select('user_id').eq('user_id', userId).single()
+                ]);
+
+                if (profileRes.data) {
                     setProfile({
-                        ...data,
-                        blocked_dates: data.blocked_dates || [],
-                        blocked_times: data.blocked_times || {},
-                        working_days: data.working_days || defaultWorkingDays,
-                        start_time: data.start_time || defaultStartTime,
-                        end_time: data.end_time || defaultEndTime,
+                        ...profileRes.data,
+                        blocked_dates: profileRes.data.blocked_dates || [],
+                        blocked_times: profileRes.data.blocked_times || {},
+                        working_days: profileRes.data.working_days || defaultWorkingDays,
+                        start_time: profileRes.data.start_time || defaultStartTime,
+                        end_time: profileRes.data.end_time || defaultEndTime,
                     });
                 } else {
                     setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime });
                 }
+                setMpConnected(!!mpRes.data);
                 setIsLoading(false);
             };
             fetchProfile();
@@ -401,6 +472,28 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             onClose();
         }
         setIsSaving(false);
+    };
+    
+    const connectMercadoPago = () => {
+        if (!MP_CLIENT_ID) {
+            alert("Configure VITE_MP_CLIENT_ID nas variáveis de ambiente.");
+            return;
+        }
+        // Constrói URL de autorização
+        const redirectUri = `${PRODUCTION_URL}/functions/v1/mercadopago-connect`;
+        const url = `https://auth.mercadopago.com.br/authorization?client_id=${MP_CLIENT_ID}&response_type=code&platform_id=mp&state=${userId}&redirect_uri=${redirectUri}`;
+        window.open(url, '_blank');
+        
+        // Polling simples para atualizar o status da conexão na UI
+        const interval = setInterval(async () => {
+            const { data } = await supabase.from('mp_connections').select('user_id').eq('user_id', userId).single();
+            if (data) {
+                setMpConnected(true);
+                clearInterval(interval);
+            }
+        }, 3000);
+        // Stop polling after 2 minutes
+        setTimeout(() => clearInterval(interval), 120000);
     };
 
     const handleWorkingDayChange = (day: string) => {
@@ -458,6 +551,28 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         <Modal isOpen={isOpen} onClose={onClose} title="Configurações do Perfil" size="lg">
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
+                    
+                     {/* Mercado Pago Connection */}
+                     <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white p-1 rounded">
+                                    <img src="https://http2.mlstatic.com/frontend-assets/mp-web-navigation/ui-navigation/5.19.5/mercadopago/logo__large.png" alt="MP" className="h-6" />
+                                </div>
+                                <span className="text-sm text-gray-300">Receba via PIX automático</span>
+                            </div>
+                            {mpConnected ? (
+                                <span className="text-green-400 text-xs font-bold flex items-center gap-1">
+                                    <CheckCircleIcon className="w-4 h-4" /> Conectado
+                                </span>
+                            ) : (
+                                <button onClick={connectMercadoPago} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-md font-bold">
+                                    Conectar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Working Hours */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-3">Horário de Funcionamento</h3>
@@ -685,9 +800,13 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const [adminProfile, setAdminProfile] = useState<Profile | null>(null);
     const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
     const [appointments, setAppointments] = useState<{ date: string; time: string; }[]>([]);
+    const [adminHasMP, setAdminHasMP] = useState(false);
     
     const [linkStatus, setLinkStatus] = useState<'loading' | 'valid' | 'invalid' | 'used'>('loading');
     const [bookingCompleted, setBookingCompleted] = useState(false);
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [paymentData, setPaymentData] = useState<any>(null);
+
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
@@ -714,17 +833,18 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 const currentAdminId = linkData.user_id;
                 setAdminId(currentAdminId);
 
-                const [profileRes, businessProfileRes, appointmentsRes] = await Promise.all([
+                const [profileRes, businessProfileRes, appointmentsRes, mpRes] = await Promise.all([
                     supabase.from('profiles').select('*').eq('id', currentAdminId).single(),
                     supabase.from('business_profiles').select('*').eq('user_id', currentAdminId).single(),
-                    supabase.from('appointments').select('date, time').eq('user_id', currentAdminId).in('status', ['Pendente', 'Confirmado'])
+                    supabase.from('appointments').select('date, time').eq('user_id', currentAdminId).in('status', ['Pendente', 'Confirmado']),
+                    supabase.from('mp_connections').select('user_id').eq('user_id', currentAdminId).single()
                 ]);
 
                 if (profileRes.error) throw profileRes.error;
                 
                 setAdminProfile(profileRes.data);
-                
                 setAppointments(appointmentsRes.data || []);
+                setAdminHasMP(!!mpRes.data); // Check if admin has MP connected
                 
                 const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
                 const defaultStartTime = '09:00';
@@ -747,6 +867,28 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         };
         validateLinkAndFetchData();
     }, [tokenId]);
+    
+    // Payment status polling
+    useEffect(() => {
+        if (!paymentModalOpen || !paymentData?.id) return;
+        
+        const channel = supabase
+            .channel(`payment-update-${paymentData.id}`)
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'payments', filter: `mp_payment_id=eq.${paymentData.id}` },
+                (payload: any) => {
+                    if (payload.new.status === 'approved') {
+                        setPaymentModalOpen(false);
+                        setBookingCompleted(true);
+                    }
+                }
+            )
+            .subscribe();
+            
+        return () => { supabase.removeChannel(channel); };
+    }, [paymentModalOpen, paymentData]);
+
 
     const isDayAvailable = useCallback((date: Date): boolean => {
         if (!businessProfile) return false;
@@ -810,7 +952,8 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         const dateString = selectedDate.toISOString().split('T')[0];
 
         try {
-            const { data, error } = await supabase.functions.invoke('book-appointment-public', {
+            // 1. Create the appointment (Pending)
+            const { data: appointmentRes, error: bookError } = await supabase.functions.invoke('book-appointment-public', {
                 body: {
                     tokenId: tokenId,
                     name: name,
@@ -821,13 +964,42 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 },
             });
 
-            if (error) {
-                // A edge function pode retornar mensagens de erro específicas
-                const errorMessage = (data as any)?.error || 'Ocorreu um erro ao salvar seu agendamento. Tente novamente.';
+            if (bookError) {
+                const errorMessage = (appointmentRes as any)?.error || 'Ocorreu um erro ao salvar seu agendamento. Tente novamente.';
                 throw new Error(errorMessage);
             }
-
-            setBookingCompleted(true);
+            
+            // 2. If admin has MP, initiate payment
+            if (adminHasMP) {
+                const { data: appointmentData } = await supabase.from('appointments').select('id').eq('date', dateString).eq('time', selectedTime).eq('user_id', adminId).single();
+                
+                if (appointmentData) {
+                    const { data: payData, error: payError } = await supabase.functions.invoke('create-payment', {
+                        body: {
+                            amount: 10.00, // TODO: Allow dynamic price setting by admin
+                            description: `Agendamento com ${name}`,
+                            professionalId: adminId,
+                            appointmentId: appointmentData.id,
+                            payerEmail: email || 'cliente@sememail.com'
+                        }
+                    });
+                    
+                    if (payError || !payData) {
+                        console.error("Payment creation failed", payError);
+                        // Don't fail the whole booking, just alert
+                        alert("Agendamento realizado, mas houve um erro ao gerar o Pix. O pagamento deverá ser feito no local.");
+                        setBookingCompleted(true);
+                    } else {
+                        setPaymentData(payData);
+                        setPaymentModalOpen(true);
+                        // Do not setBookingCompleted yet, wait for payment
+                    }
+                } else {
+                    setBookingCompleted(true);
+                }
+            } else {
+                setBookingCompleted(true);
+            }
 
         } catch (err: any) {
             setMessage({ type: 'error', text: err.message });
@@ -969,11 +1141,12 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                         )}
 
                         <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Confirmar Agendamento'}
+                            {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : adminHasMP ? 'Pagar e Confirmar' : 'Confirmar Agendamento'}
                         </button>
                     </form>
                 </div>
             </div>
+            <PaymentModal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} paymentData={paymentData} />
         </div>
     );
 };
@@ -1078,7 +1251,7 @@ const LoginPage = () => {
 const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile | null, setProfile: React.Dispatch<React.SetStateAction<Profile | null>>}) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
-    const [statusFilter, setStatusFilter] = useState<'Pendente' | 'Confirmado' | 'Cancelado' | 'Todos'>('Todos');
+    const [statusFilter, setStatusFilter] = useState<'Pendente' | 'Confirmado' | 'Cancelado' | 'Pago' | 'Todos'>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -1629,7 +1802,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
              <div className="mb-6">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="flex flex-wrap justify-center gap-1 glassmorphism p-1 rounded-lg">
-                        {(['Todos', 'Pendente', 'Confirmado', 'Cancelado'] as const).map(status => (
+                        {(['Todos', 'Pendente', 'Confirmado', 'Pago', 'Cancelado'] as const).map(status => (
                             <button
                                 key={status}
                                 onClick={() => setStatusFilter(status)}
