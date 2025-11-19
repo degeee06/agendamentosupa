@@ -1681,7 +1681,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
     
         // Recarregar a página é uma maneira robusta de garantir que todo o estado do cliente seja limpo.
-        // A lógica de inicialização aprimorada cuidará de qualquer sessão inválida que possa ter permanecido.
+        // A lógica de inicialização aprimorada cuidará dos outros clientes, e a prevenção de duplicidade já foi adicionada.
         window.location.reload();
     };
 
