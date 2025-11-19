@@ -27,6 +27,11 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
   throw new Error(`Variáveis de ambiente ausentes: ${missingVars}. Por favor, configure-as no seu arquivo .env ou nas configurações do seu provedor de hospedagem.`);
 }
 
+// Validação não-bloqueante para MP (apenas avisa no console se faltar, para não quebrar o app todo se não usar pagamento)
+if (!MP_CLIENT_ID || !MP_REDIRECT_URL) {
+    console.warn("Atenção: Variáveis do Mercado Pago (VITE_MP_CLIENT_ID ou VITE_MP_REDIRECT_URL) não foram detectadas. A funcionalidade de pagamentos não funcionará.");
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Tipos
@@ -520,9 +525,13 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     };
     
     const connectMercadoPago = () => {
+        if (!MP_CLIENT_ID || !MP_REDIRECT_URL) {
+            alert("Erro de configuração: VITE_MP_CLIENT_ID ou VITE_MP_REDIRECT_URL não estão definidos no ambiente. Verifique as configurações no Vercel e faça um novo deploy.");
+            return;
+        }
         // Redireciona para a URL de autorização do Mercado Pago
         // Você deve gerar um 'state' seguro (aqui usamos o userId) para validar no callback
-        const authUrl = `https://auth.mercadopago.com.br/authorization?client_id=${MP_CLIENT_ID}&response_type=code&platform_id=mp&state=${userId}&redirect_uri=${encodeURIComponent(MP_REDIRECT_URL || '')}`;
+        const authUrl = `https://auth.mercadopago.com.br/authorization?client_id=${MP_CLIENT_ID}&response_type=code&platform_id=mp&state=${userId}&redirect_uri=${encodeURIComponent(MP_REDIRECT_URL)}`;
         window.location.href = authUrl;
     };
 
