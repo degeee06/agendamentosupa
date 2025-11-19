@@ -1,20 +1,47 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { create, getNumericDate } from "https://deno.land/x/djwt@v2.4/mod.ts";
 
 declare const Deno: any;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const DenoEnv = (Deno as any).env;
+
+// Função auxiliar para obter token OAuth (necessário para Push Notification)
+async function getAccessToken() {
+  const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
+  if (!serviceAccountJSON) throw new Error('FCM_SERVICE_ACCOUNT_KEY não configurado.');
+  const serviceAccount = JSON.parse(serviceAccountJSON);
+  const privateKeyData = atob(serviceAccount.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\n/g, ''));
+  const privateKeyBuffer = new Uint8Array(privateKeyData.length);
+  for (let i = 0; i < privateKeyData.length; i++) privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
+  const key = await crypto.subtle.importKey("pkcs8", privateKeyBuffer, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, true, ["sign"]);
+  const jwt = await create({ alg: "RS256", typ: "JWT" }, { iss: serviceAccount.client_email, scope: "https://www.googleapis.com/auth/firebase.messaging", aud: "https://oauth2.googleapis.com/token", exp: getNumericDate(3600), iat: getNumericDate(0) }, key);
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: jwt }) });
+  return (await tokenResponse.json()).access_token;
+}
+
+const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
+  try {
+    const { data: tokensData } = await supabaseAdmin.from('notification_tokens').select('token').eq('user_id', userId);
+    if (!tokensData || tokensData.length === 0) return;
+    const accessToken = await getAccessToken();
+    const projectId = JSON.parse(DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY')).project_id;
+    await Promise.all(tokensData.map((t: any) => fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: { token: t.token, notification: { title, body } } })
+    })));
+  } catch (e) { console.error('Push error', e); }
+};
 
 serve(async (req) => {
   try {
     const url = new URL(req.url);
-    // O Mercado Pago envia o tipo de tópico e o ID na query string ou no corpo
-    // Formato comum: ?topic=payment&id=123456789
     const topic = url.searchParams.get("topic") || url.searchParams.get("type");
     const id = url.searchParams.get("id") || url.searchParams.get("data.id");
-
-    // Se vier no body (formato novo)
+    
     let bodyId = null;
     let bodyAction = null;
     if (req.body) {
@@ -22,82 +49,58 @@ serve(async (req) => {
             const body = await req.json();
             bodyId = body.data?.id;
             bodyAction = body.action;
-        } catch (e) {
-            // Body vazio ou inválido, ignora
-        }
+        } catch (e) {}
     }
 
     const paymentId = id || bodyId;
     const action = topic || bodyAction;
 
-    // Só nos interessa atualizações de pagamento
     if ((action !== "payment" && action !== "payment.updated") || !paymentId) {
         return new Response("Ignored", { status: 200 });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // 1. Busca na nossa tabela 'payments' para saber qual agendamento é esse
+    // 1. Busca pagamento local
     const { data: paymentRecord, error: paymentError } = await supabase
         .from("payments")
-        .select("appointment_id, mp_payment_id, appointment:appointments(user_id)") // user_id é o profissional
+        .select("appointment_id, mp_payment_id, appointment:appointments(user_id, name, date, time)") 
         .eq("mp_payment_id", paymentId)
         .single();
 
     if (paymentError || !paymentRecord) {
-        console.log(`Pagamento ${paymentId} não encontrado no sistema.`);
         return new Response("Payment not found locally", { status: 200 }); 
-        // Retorna 200 para o MP parar de tentar reenviar, já que não é um pagamento nosso
     }
 
-    // 2. Precisamos consultar o status atual na API do Mercado Pago para garantir
-    // Para isso, precisamos do token do PROFISSIONAL (dono do agendamento)
+    // 2. Busca status no MP
     const professionalId = paymentRecord.appointment.user_id;
-    
-    const { data: connection } = await supabase
-        .from("mp_connections")
-        .select("access_token")
-        .eq("user_id", professionalId)
-        .single();
-
-    if (!connection) {
-        console.error("Profissional desconectou o MP.");
-        return new Response("Professional disconnected", { status: 200 });
-    }
+    const { data: connection } = await supabase.from("mp_connections").select("access_token").eq("user_id", professionalId).single();
+    if (!connection) return new Response("Professional disconnected", { status: 200 });
 
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: {
-            "Authorization": `Bearer ${connection.access_token}`
-        }
+        headers: { "Authorization": `Bearer ${connection.access_token}` }
     });
-
-    if (!mpRes.ok) {
-        console.error("Erro ao buscar pagamento no MP");
-        return new Response("MP API Error", { status: 500 });
-    }
-
+    if (!mpRes.ok) return new Response("MP API Error", { status: 500 });
     const mpData = await mpRes.json();
-    const status = mpData.status; // approved, pending, rejected, etc.
+    const status = mpData.status;
 
-    // 3. Atualiza a tabela 'payments'
-    await supabase.from("payments").update({
-        status: status,
-        updated_at: new Date().toISOString()
-    }).eq("mp_payment_id", paymentId);
+    // 3. Atualiza DB
+    await supabase.from("payments").update({ status: status, updated_at: new Date().toISOString() }).eq("mp_payment_id", paymentId);
 
-    // 4. Se aprovado, atualiza o agendamento para 'Confirmado' (ou lógica específica de pago)
+    // 4. Atualiza Agendamento
     if (status === "approved") {
-        await supabase.from("appointments").update({
-            status: "Confirmado" // Ou criar um status novo 'Pago' se preferir
-        }).eq("id", paymentRecord.appointment_id);
+        const { error } = await supabase.from("appointments").update({ status: "Confirmado" }).eq("id", paymentRecord.appointment_id);
         
-        console.log(`Agendamento ${paymentRecord.appointment_id} confirmado via Pix!`);
+        if (!error) {
+            // Envia Push Notification
+            const appt = paymentRecord.appointment;
+            const formattedDate = new Date(appt.date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            await sendPushNotification(supabase, professionalId, 'Pagamento Recebido!', `${appt.name} confirmou o agendamento para ${formattedDate} às ${appt.time}.`);
+        }
     }
 
     return new Response("OK", { status: 200 });
-
   } catch (e: any) {
-    console.error("Webhook Error:", e.message);
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
 });
