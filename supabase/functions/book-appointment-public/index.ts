@@ -240,7 +240,8 @@ serve(async (req: Request) => {
     );
 
 
-    return new Response(JSON.stringify({ success: true }), {
+    // IMPORTANTE: Retornamos o ID do agendamento para que o frontend possa gerar o pagamento.
+    return new Response(JSON.stringify({ success: true, appointmentId: newAppointment.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
