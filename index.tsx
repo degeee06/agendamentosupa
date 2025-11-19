@@ -462,25 +462,13 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     };
 
     const handleConnectMercadoPago = () => {
-        // O MP_CLIENT_ID é seguro para expor no frontend, mas o SECRET fica no backend.
-        // Vamos usar uma constante aqui ou variável de ambiente. Como o prompt pediu para manter o resto intacto,
-        // vou assumir que precisamos construir a URL.
-        // NOTA: Para produção real, o ideal é buscar essa URL do backend, mas para simplificar e atender o "app request":
-        const APP_ID = "6725585247366717"; // Exemplo de ID público ou vindo de env. 
-        // Se não tivermos o APP_ID, redirecionamos para uma página que explica ou usamos um placeholder.
-        // O jeito CORRETO sem expor secrets do backend é difícil sem uma rota, mas a URL de AUTH usa apenas Client ID.
-        // Vou usar uma URL genérica que o usuário deve substituir ou buscar via edge function se fosse complexo.
-        // Melhor abordagem: Link direto com state = userId.
+        // Remove trailing slash if exists to avoid double slashes in redirect URL
+        const baseUrl = SUPABASE_URL.endsWith('/') ? SUPABASE_URL.slice(0, -1) : SUPABASE_URL;
+        const redirectUri = `${baseUrl}/functions/v1/mercadopago-connect`;
         
-        // Como não tenho o APP_ID nas vars do frontend (apenas backend), vou assumir que o usuário configurou.
-        // Mas para funcionar AGORA, preciso de um ID. Vou deixar um placeholder claro.
-        // Na verdade, a melhor prática é ter isso em VITE_MP_PUBLIC_KEY ou similar.
-        // Vou usar um link direto para a function "mercadopago-connect" se ela pudesse iniciar o fluxo,
-        // mas OAuth deve começar no browser.
-        
-        const redirectUri = `${SUPABASE_URL}/functions/v1/mercadopago-connect`;
-        // Substitua pelo seu App ID do Mercado Pago
-        const mpAppId = "6725585247366717"; 
+        // ID da Aplicação configurado no Dashboard do Mercado Pago (PROD)
+        const mpAppId = "5455078434819108"; 
+
         const authUrl = `https://auth.mercadopago.com.br/authorization?client_id=${mpAppId}&response_type=code&platform_id=mp&state=${userId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
         
         window.location.href = authUrl;
