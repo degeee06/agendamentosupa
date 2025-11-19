@@ -875,6 +875,14 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                             .eq('id', linkData.appointment_id)
                             .single();
                         
+                        // Se status for 'Confirmado', mostra a tela de sucesso
+                        if (appt && appt.status === 'Confirmado') {
+                            setBookingCompleted(true);
+                            setLinkStatus('valid');
+                            return;
+                        }
+
+                        // Se status for 'Aguardando Pagamento', restaura.
                         if (appt && appt.status === 'Aguardando Pagamento') {
                             // Recupera sessão!
                             setAdminId(linkData.user_id);
@@ -1180,14 +1188,22 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 throw new Error(errorMessage);
             }
             
-            const newApptId = data.appointment.id;
+            const newAppt = data.appointment;
+            const newApptId = newAppt.id;
             setPendingAppointmentId(newApptId); // Salva estado para realtime
 
-            // Verificar se precisa de pagamento
+            // VERIFICA SE O AGENDAMENTO JÁ FOI CRIADO COMO CONFIRMADO (Grátis ou sem MP)
+            if (newAppt.status === 'Confirmado') {
+                setBookingCompleted(true);
+                return; // Encerra o fluxo aqui, não gera pagamento.
+            }
+
+            // Se não confirmado, verificar se precisa de pagamento (dupla verificação com o estado local)
             if (businessProfile?.service_price && businessProfile.service_price > 0) {
                 // Inicia fluxo de pagamento
                 await handlePayment(newApptId, businessProfile.service_price);
             } else {
+                // Fallback: se por algum motivo o back retornou pendente mas o front acha que é 0
                 setBookingCompleted(true);
             }
 

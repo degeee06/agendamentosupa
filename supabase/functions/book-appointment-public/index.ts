@@ -165,17 +165,22 @@ serve(async (req: Request) => {
     }
     const adminId = linkData.user_id;
 
-    // 2. Verifica o perfil do profissional e o limite de uso.
-    const { data: adminProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('plan, daily_usage, last_usage_date')
-      .eq('id', adminId)
-      .single();
+    // 2. Verifica o perfil do profissional (Limites) E Perfil de Negócio (Preço) E Conexão MP.
+    const [profileRes, businessRes, mpRes] = await Promise.all([
+        supabaseAdmin.from('profiles').select('plan, daily_usage, last_usage_date').eq('id', adminId).single(),
+        supabaseAdmin.from('business_profiles').select('service_price').eq('user_id', adminId).single(),
+        supabaseAdmin.from('mp_connections').select('access_token').eq('user_id', adminId).single()
+    ]);
     
-    if (profileError || !adminProfile) {
+    const adminProfile = profileRes.data;
+    const businessProfile = businessRes.data;
+    const mpConnection = mpRes.data;
+
+    if (profileRes.error || !adminProfile) {
         throw new Error('Não foi possível encontrar o perfil do profissional.');
     }
 
+    // Verifica limite do plano Trial
     if (adminProfile.plan === 'trial') {
       const today = new Date().toISOString().split('T')[0];
       const currentUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage : 0;
@@ -186,18 +191,29 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Insere o novo agendamento com status 'Aguardando Pagamento'.
+    // 3. Determina o status inicial
+    // Se preço > 0 E tem conta conectada -> Aguardando Pagamento
+    // Se preço == 0 OU não tem conta -> Confirmado
+    const servicePrice = businessProfile?.service_price || 0;
+    const hasMpConnection = !!mpConnection?.access_token;
+    
+    let initialStatus = 'Aguardando Pagamento';
+    if (servicePrice <= 0 || !hasMpConnection) {
+        initialStatus = 'Confirmado';
+    }
+
+    // 4. Insere o novo agendamento
     const { data: newAppointment, error: insertError } = await supabaseAdmin
       .from('appointments')
       .insert({
-        name, email, phone, date, time, user_id: adminId, status: 'Aguardando Pagamento'
+        name, email, phone, date, time, user_id: adminId, status: initialStatus
       })
       .select()
       .single();
 
     if (insertError) throw insertError;
 
-    // 4. Atualiza a contagem de uso se for um plano 'trial'.
+    // 5. Atualiza a contagem de uso se for um plano 'trial'.
     if (adminProfile.plan === 'trial') {
       const today = new Date().toISOString().split('T')[0];
       const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
@@ -211,12 +227,12 @@ serve(async (req: Request) => {
       }
     }
     
-    // 5. Marca o link como utilizado E vincula o appointment_id para recuperação.
+    // 6. Marca o link como utilizado E vincula o appointment_id.
     const { error: updateLinkError } = await supabaseAdmin
       .from('one_time_links')
       .update({ 
         is_used: true,
-        appointment_id: newAppointment.id // CRÍTICO: Salva o ID para permitir recuperação se o pagamento falhar
+        appointment_id: newAppointment.id 
       })
       .eq('id', tokenId);
     
@@ -224,7 +240,7 @@ serve(async (req: Request) => {
       console.error(`CRÍTICO: Falha ao marcar o link ${tokenId} como usado após o agendamento.`, updateLinkError);
     }
 
-    // 6. Envia uma notificação de broadcast para o dashboard do usuário.
+    // 7. Envia uma notificação de broadcast para o dashboard do usuário.
     const channel = supabaseAdmin.channel(`dashboard-${adminId}`);
     await channel.send({
       type: 'broadcast',
@@ -232,14 +248,26 @@ serve(async (req: Request) => {
       payload: newAppointment,
     });
     
-    // NOTA: O push notification agora é enviado preferencialmente pelo webhook de pagamento confirmado.
-    // Mas mantemos aqui como "Novo Agendamento Pendente".
+    // Notificação Push:
+    // Se já confirmou (grátis), avisa que confirmou. Se pendente, avisa que é pendente.
     const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    
+    let pushTitle = 'Novo Agendamento';
+    let pushBody = `${name} agendou para ${formattedDate} às ${time}.`;
+
+    if (initialStatus === 'Aguardando Pagamento') {
+        pushTitle = 'Novo Agendamento (Pendente)';
+        pushBody = `${name} iniciou um agendamento. Aguardando pagamento.`;
+    } else {
+        pushTitle = 'Novo Agendamento Confirmado!';
+        pushBody = `${name} agendou para ${formattedDate} às ${time}.`;
+    }
+
     await sendPushNotification(
       supabaseAdmin,
       adminId,
-      'Novo Agendamento (Pendente)',
-      `${name} iniciou um agendamento para ${formattedDate} às ${time}. Aguardando pagamento.`
+      pushTitle,
+      pushBody
     );
 
     return new Response(JSON.stringify({ success: true, appointment: newAppointment }), {
