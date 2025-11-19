@@ -140,6 +140,7 @@ const BotIcon = (props: any) => <Icon {...props}><path d="M12 8V4H8" /><rect x="
 const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></Icon>;
 const ChatBubbleIcon = (props: any) => <Icon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></Icon>;
 const MenuIcon = (props: any) => <Icon {...props}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></Icon>;
+const RefreshIcon = (props: any) => <Icon {...props}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></Icon>;
 
 
 // --- Componentes de UI ---
@@ -276,7 +277,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     );
 };
 
-const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId }: { isOpen: boolean, onClose: () => void, paymentData: PaymentData, appointmentId: string }) => {
+const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualCheck }: { isOpen: boolean, onClose: () => void, paymentData: PaymentData, appointmentId: string, onManualCheck: (id: number) => Promise<void> }) => {
     const [copied, setCopied] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
 
@@ -284,6 +285,12 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId }: { isOpen:
         navigator.clipboard.writeText(paymentData.qr_code);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleCheckClick = async () => {
+        setIsChecking(true);
+        await onManualCheck(paymentData.id);
+        setIsChecking(false);
     };
 
     return (
@@ -316,14 +323,23 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId }: { isOpen:
                     </div>
                 </div>
 
-                <div className="text-center space-y-2">
+                <div className="text-center space-y-2 w-full">
                     <p className="text-yellow-400 text-sm font-medium flex items-center justify-center gap-2">
                         <LoaderIcon className="w-4 h-4" />
                         Aguardando confirmação...
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 mb-2">
                         Assim que o pagamento for confirmado, esta tela será atualizada automaticamente.
                     </p>
+                    
+                    <button 
+                        onClick={handleCheckClick}
+                        disabled={isChecking}
+                        className="w-full mt-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 text-sm font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                        {isChecking ? <LoaderIcon className="w-4 h-4" /> : <RefreshIcon className="w-4 h-4" />}
+                        Já realizei o pagamento
+                    </button>
                 </div>
             </div>
         </Modal>
@@ -869,14 +885,20 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                             // Buscar dados do pagamento existente para mostrar o QR Code de novo
                              const { data: existingPayment } = await supabase
                                 .from('payments')
-                                .select('mp_payment_id')
+                                .select('*')
                                 .eq('appointment_id', appt.id)
                                 .single();
                             
                             if (existingPayment) {
-                                // Se já existe pagamento, tentamos "recriar" (idempotente) para pegar o QR code visual
-                                // Ou idealmente, a tabela payments guardaria o QR code. 
-                                // Como a Edge Function `create-payment` é idempotente pelo appointmentId, podemos chamá-la de novo sem medo.
+                                setPaymentData({
+                                    id: parseInt(existingPayment.mp_payment_id),
+                                    status: existingPayment.status,
+                                    qr_code: '', // Infelizmente não salvamos o QR Code no banco, teremos que gerar de novo ou confiar que o usuário feche e abra
+                                    qr_code_base64: '',
+                                    ticket_url: ''
+                                });
+                                // Nota: Se o QR code não estiver salvo, o ideal seria chamar create-payment novamente (que é idempotente)
+                                // ou apenas mostrar o botão de "Já paguei"
                             }
 
                             // Continua carregando o perfil do admin para exibir infos corretas
@@ -921,11 +943,6 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
                 setLinkStatus('valid');
                 
-                // Se recuperamos um agendamento pendente, já iniciamos o fluxo de pagamento visualmente
-                if (pendingAppointmentId) {
-                     // Abertura automática do modal de pagamento será feita via chamada idempotente no handleSubmit ou useEffect separado
-                }
-
             } catch (error) {
                 console.error('Erro ao buscar dados do admin:', error);
                 setLinkStatus('invalid');
@@ -954,6 +971,31 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
         return () => { supabase.removeChannel(channel); };
     }, [pendingAppointmentId]);
+
+    const handleManualVerification = async (paymentId: number) => {
+        try {
+            // Tenta chamar o webhook manualmente para forçar a verificação
+            const { data, error } = await supabase.functions.invoke('mp-webhook', {
+                body: {
+                    id: paymentId.toString(),
+                    action: 'payment.updated'
+                }
+            });
+
+            if (error) throw error;
+            
+            if (data && data.status === 'approved') {
+                setPaymentModalOpen(false);
+                setBookingCompleted(true);
+            } else {
+                alert('O pagamento ainda não foi confirmado pelo banco. Por favor, aguarde mais alguns instantes e tente novamente.');
+            }
+
+        } catch (err) {
+            console.error("Erro na verificação manual:", err);
+            alert('Não foi possível verificar o pagamento no momento. Tente novamente.');
+        }
+    };
 
 
     const isDayAvailable = useCallback((date: Date): boolean => {
@@ -1029,6 +1071,21 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Caso de recuperação onde o usuário clica em "Abrir Pagamento Pix"
+        if (pendingAppointmentId && adminId && businessProfile?.service_price) {
+             // Se já temos dados de pagamento na memória, abre modal
+             if (paymentData) {
+                 setPaymentModalOpen(true);
+             } else {
+                 // Se não, gera um novo (idempotente) para pegar o QR Code visual
+                 setIsSaving(true);
+                 await handlePayment(pendingAppointmentId, businessProfile.service_price);
+                 setIsSaving(false);
+             }
+             return;
+        }
+
         if (!selectedDate || !selectedTime || !adminId) return;
 
         setMessage(null);
@@ -1041,43 +1098,31 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         setIsSaving(true);
         
         try {
-            let currentApptId = pendingAppointmentId;
+            const dateString = selectedDate.toISOString().split('T')[0];
+            const { data, error } = await supabase.functions.invoke('book-appointment-public', {
+                body: {
+                    tokenId: tokenId,
+                    name: name,
+                    phone: unmaskedPhone,
+                    email: email,
+                    date: dateString,
+                    time: selectedTime,
+                },
+            });
 
-            // Se NÃO estamos recuperando um agendamento, cria um novo
-            if (!currentApptId) {
-                const dateString = selectedDate.toISOString().split('T')[0];
-                const { data, error } = await supabase.functions.invoke('book-appointment-public', {
-                    body: {
-                        tokenId: tokenId,
-                        name: name,
-                        phone: unmaskedPhone,
-                        email: email,
-                        date: dateString,
-                        time: selectedTime,
-                    },
-                });
-
-                if (error) {
-                    const errorMessage = (data as any)?.error || 'Ocorreu um erro ao salvar seu agendamento.';
-                    throw new Error(errorMessage);
-                }
-                
-                currentApptId = data.appointment.id;
-                setPendingAppointmentId(currentApptId); // Salva estado para realtime
+            if (error) {
+                const errorMessage = (data as any)?.error || 'Ocorreu um erro ao salvar seu agendamento.';
+                throw new Error(errorMessage);
             }
+            
+            const newApptId = data.appointment.id;
+            setPendingAppointmentId(newApptId); // Salva estado para realtime
 
             // Verificar se precisa de pagamento
             if (businessProfile?.service_price && businessProfile.service_price > 0) {
                 // Inicia fluxo de pagamento
-                await handlePayment(currentApptId!, businessProfile.service_price);
+                await handlePayment(newApptId, businessProfile.service_price);
             } else {
-                // Se for gratuito, finaliza direto
-                // Mas espera... se for gratuito, o book-appointment-public deixa como 'Pendente' ou 'Aguardando'? 
-                // O código atual deixa 'Aguardando Pagamento' fixo.
-                // Idealmente, deveria ter lógica no backend, mas vamos corrigir visualmente aqui:
-                // Se preço for 0, devemos chamar uma função para "Confirmar" direto ou assumir sucesso.
-                // Como o backend está hardcoded para 'Aguardando Pagamento', vamos manter o fluxo de sucesso visual
-                // e talvez o profissional confirme manualmente se for grátis.
                 setBookingCompleted(true);
             }
 
@@ -1195,12 +1240,25 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                         <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lg mb-6 text-center">
                             <p className="text-yellow-200 font-bold mb-2">Pagamento Pendente</p>
                             <p className="text-sm text-gray-300 mb-4">Você já iniciou este agendamento. Finalize o pagamento para confirmar.</p>
-                            <button 
-                                onClick={handleSubmit}
-                                className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded w-full transition-colors"
-                            >
-                                Abrir Pagamento Pix
-                            </button>
+                            
+                            <div className="flex flex-col gap-2">
+                                <button 
+                                    onClick={handleSubmit}
+                                    className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded w-full transition-colors"
+                                >
+                                    Abrir Pagamento Pix
+                                </button>
+                                
+                                {paymentData && (
+                                    <button 
+                                        onClick={() => handleManualVerification(paymentData.id)}
+                                        className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 font-bold py-2 px-4 rounded w-full transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <RefreshIcon className="w-4 h-4" />
+                                        Já realizei o pagamento
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-6">
@@ -1253,6 +1311,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                     onClose={() => setPaymentModalOpen(false)} 
                     paymentData={paymentData}
                     appointmentId={pendingAppointmentId}
+                    onManualCheck={handleManualVerification}
                 />
             )}
         </div>
