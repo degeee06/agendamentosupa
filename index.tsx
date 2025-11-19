@@ -301,11 +301,17 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualChe
                 </p>
                 
                 <div className="bg-white p-4 rounded-xl">
-                    <img 
-                        src={`data:image/png;base64,${paymentData.qr_code_base64}`} 
-                        alt="QR Code Pix" 
-                        className="w-48 h-48 object-contain" 
-                    />
+                    {paymentData.qr_code_base64 ? (
+                        <img 
+                            src={`data:image/png;base64,${paymentData.qr_code_base64}`} 
+                            alt="QR Code Pix" 
+                            className="w-48 h-48 object-contain" 
+                        />
+                    ) : (
+                        <div className="w-48 h-48 flex items-center justify-center bg-gray-100 text-gray-400 text-xs">
+                            Carregando QR...
+                        </div>
+                    )}
                 </div>
 
                 <div className="w-full space-y-2">
@@ -313,7 +319,7 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualChe
                     <div className="flex items-center space-x-2 bg-black/30 p-3 rounded-lg border border-gray-600">
                         <input 
                             type="text" 
-                            value={paymentData.qr_code} 
+                            value={paymentData.qr_code || ''} 
                             readOnly 
                             className="bg-transparent text-white w-full outline-none text-sm truncate" 
                         />
@@ -890,15 +896,39 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                 .single();
                             
                             if (existingPayment) {
-                                setPaymentData({
-                                    id: parseInt(existingPayment.mp_payment_id),
-                                    status: existingPayment.status,
-                                    qr_code: '', // Infelizmente não salvamos o QR Code no banco, teremos que gerar de novo ou confiar que o usuário feche e abra
-                                    qr_code_base64: '',
-                                    ticket_url: ''
-                                });
-                                // Nota: Se o QR code não estiver salvo, o ideal seria chamar create-payment novamente (que é idempotente)
-                                // ou apenas mostrar o botão de "Já paguei"
+                                // Tenta buscar os dados completos do pagamento (QR Code) novamente via Edge Function
+                                try {
+                                    const { data: qrData, error: qrError } = await supabase.functions.invoke('create-payment', {
+                                        body: {
+                                            action: 'retrieve',
+                                            paymentId: existingPayment.mp_payment_id,
+                                            professionalId: linkData.user_id
+                                        }
+                                    });
+                                    
+                                    if (qrData && !qrData.error) {
+                                        setPaymentData(qrData);
+                                    } else {
+                                        console.warn("Falha ao recuperar QR Code completo:", qrData?.error);
+                                        // Fallback: usa dados parciais do banco (sem imagem QR)
+                                        setPaymentData({
+                                            id: parseInt(existingPayment.mp_payment_id),
+                                            status: existingPayment.status,
+                                            qr_code: '', 
+                                            qr_code_base64: '',
+                                            ticket_url: ''
+                                        });
+                                    }
+                                } catch (e) {
+                                    console.error("Erro na chamada da Edge Function para recuperar QR Code:", e);
+                                     setPaymentData({
+                                        id: parseInt(existingPayment.mp_payment_id),
+                                        status: existingPayment.status,
+                                        qr_code: '',
+                                        qr_code_base64: '',
+                                        ticket_url: ''
+                                    });
+                                }
                             }
 
                             // Continua carregando o perfil do admin para exibir infos corretas
@@ -972,11 +1002,13 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         return () => { supabase.removeChannel(channel); };
     }, [pendingAppointmentId]);
 
-    // NOVO: Polling automático enquanto o modal estiver aberto
+    // Polling automático robusto: Funciona enquanto houver um pagamento pendente conhecido,
+    // independente se o modal está aberto ou fechado.
     useEffect(() => {
         let intervalId: any;
 
-        if (paymentModalOpen && paymentData && pendingAppointmentId) {
+        // Só faz polling se tivermos um ID de pagamento, um agendamento pendente e a reserva ainda não estiver concluída.
+        if (paymentData?.id && pendingAppointmentId && !bookingCompleted) {
             const checkStatus = async () => {
                 try {
                     // Chama o webhook manualmente apenas para verificar (silent check)
@@ -1003,7 +1035,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [paymentModalOpen, paymentData, pendingAppointmentId]);
+    }, [paymentData, pendingAppointmentId, bookingCompleted]);
 
     const handleManualVerification = async (paymentId: number) => {
         try {
