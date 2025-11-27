@@ -123,7 +123,7 @@ const XCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="
 const SearchIcon = (props: any) => <Icon {...props}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></Icon>;
 const PlusIcon = (props: any) => <Icon {...props}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
 const UserIcon = (props: any) => <Icon {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></Icon>;
-const MailIcon = (props: any) => <Icon {...props}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></Icon>;
+const MailIcon = (props: any) => <Icon {...props}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></Icon>;
 const PhoneIcon = (props: any) => <Icon {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></Icon>;
 const LinkIcon = (props: any) => <Icon {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></Icon>;
 const LogOutIcon = (props: any) => <Icon {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></Icon>;
@@ -519,6 +519,25 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         window.location.href = mpAuthUrl;
     };
 
+    const handleDisconnect = async () => {
+        const confirmDisconnect = window.confirm("Deseja realmente desconectar sua conta do Mercado Pago? Você não poderá receber pagamentos Pix até conectar novamente.");
+        if (!confirmDisconnect) return;
+
+        setIsLoading(true);
+        const { error } = await supabase
+            .from('mp_connections')
+            .delete()
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error("Erro ao desconectar:", error);
+            alert("Erro ao desconectar. Verifique se você rodou o comando SQL para permitir exclusão (DELETE policy) no Supabase.");
+        } else {
+            setMpConnection(null);
+        }
+        setIsLoading(false);
+    };
+
     const handleWorkingDayChange = (day: string) => {
         setProfile(p => ({
             ...p,
@@ -580,9 +599,18 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                         <h3 className="text-lg font-semibold text-white mb-2">Pagamentos (Mercado Pago)</h3>
                         <p className="text-sm text-gray-400 mb-4">Conecte sua conta do Mercado Pago para receber pagamentos via Pix automaticamente.</p>
                         {mpConnection ? (
-                            <div className="flex items-center space-x-2 text-green-400 bg-green-400/10 p-3 rounded-lg">
-                                <CheckCircleIcon className="w-5 h-5" />
-                                <span className="font-bold">Conta Conectada</span>
+                            <div className="bg-green-400/10 p-3 rounded-lg border border-green-400/20">
+                                <div className="flex items-center space-x-2 text-green-400 mb-3">
+                                    <CheckCircleIcon className="w-5 h-5" />
+                                    <span className="font-bold">Conta Conectada</span>
+                                </div>
+                                <button
+                                    onClick={handleDisconnect}
+                                    className="w-full bg-red-500/20 hover:bg-red-500/40 text-red-300 text-sm font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <LogOutIcon className="w-4 h-4" />
+                                    Desconectar / Trocar Conta
+                                </button>
                             </div>
                         ) : (
                             <button 
@@ -850,8 +878,22 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
     const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
 
+    // Salva o sucesso no localStorage para evitar "Link Expirado" após reload
+    useEffect(() => {
+        if (bookingCompleted) {
+            localStorage.setItem(`booking_success_${tokenId}`, 'true');
+        }
+    }, [bookingCompleted, tokenId]);
+
     useEffect(() => {
         const validateLinkAndFetchData = async () => {
+            // UX: Verifica se já finalizou neste dispositivo para evitar "Link Utilizado" logo após pagar
+            if (localStorage.getItem(`booking_success_${tokenId}`) === 'true') {
+                setBookingCompleted(true);
+                setLinkStatus('valid'); // Sai do loading
+                return;
+            }
+
             try {
                 setLinkStatus('loading');
                 const { data: linkData, error: linkError } = await supabase
