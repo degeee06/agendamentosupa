@@ -2161,6 +2161,43 @@ const App = () => {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [path, setPath] = useState(window.location.pathname);
+
+    useEffect(() => {
+        // Verifica se há retorno do Mercado Pago na URL (Web)
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const state = params.get('state'); // UserId
+
+        if (code && state) {
+            const connectMercadoPago = async () => {
+                setIsLoading(true);
+                try {
+                    const { data, error } = await supabase.functions.invoke('mercadopago-connect', {
+                        body: { code, state }
+                    });
+
+                    if (error) throw error;
+                    
+                    if (data?.success) {
+                        alert('Conta do Mercado Pago conectada com sucesso!');
+                        // Remove os parâmetros da URL para limpar
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        // Recarrega a página para atualizar o estado do perfil
+                        window.location.reload();
+                    } else {
+                         throw new Error(data?.error || 'Erro desconhecido');
+                    }
+                } catch (err: any) {
+                    console.error('Erro ao processar callback do Mercado Pago:', err);
+                    alert(`Erro ao conectar: ${err.message}`);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            connectMercadoPago();
+        }
+    }, []);
     
     useEffect(() => {
         // Handle native OAuth callback
