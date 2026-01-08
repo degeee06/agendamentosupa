@@ -469,7 +469,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                         working_days: profileRes.data.working_days || defaultWorkingDays,
                         start_time: profileRes.data.start_time || defaultStartTime,
                         end_time: profileRes.data.end_time || defaultEndTime,
-                        service_price: profileRes.data.service_price || 0
+                        service_price: profileRes.data.service_price !== undefined ? profileRes.data.service_price : 0
                     });
                 } else {
                     setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime, service_price: 0 });
@@ -483,7 +483,12 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
 
     const handleSave = async () => {
         setIsSaving(true);
-        const { error } = await supabase.from('business_profiles').upsert(profile, { onConflict: 'user_id' });
+        // Garantir que o preço seja salvo como número
+        const profileToSave = {
+            ...profile,
+            service_price: profile.service_price ? parseFloat(profile.service_price as any) : 0
+        };
+        const { error } = await supabase.from('business_profiles').upsert(profileToSave, { onConflict: 'user_id' });
         if (error) {
             console.error("Erro ao salvar perfil de negócio:", error);
         } else {
@@ -632,8 +637,12 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                                 type="number" 
                                 step="0.01"
                                 placeholder="0.00" 
-                                value={profile.service_price || ''} 
-                                onChange={e => setProfile(p => ({ ...p, service_price: parseFloat(e.target.value) }))}
+                                value={profile.service_price === 0 ? '' : (profile.service_price ?? '')} 
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    // Mantemos como string no estado local para permitir a digitação de decimais (0., 0.0, etc)
+                                    setProfile(p => ({ ...p, service_price: val as any }));
+                                }}
                                 className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 pl-10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
                             />
                          </div>
@@ -1231,7 +1240,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 throw new Error(errorMessage);
             }
             
-            const newAppt = data.appointment;
+            const { appointment: newAppt } = data;
             const newApptId = newAppt.id;
             setPendingAppointmentId(newApptId); // Salva estado para realtime
 
@@ -2263,9 +2272,13 @@ const App = () => {
                 
                 // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
                 if (profileError && profileError.code === 'PGRST116') { 
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
                     const { data: newProfile, error: insertError } = await supabase
                         .from('profiles')
-                        .insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() })
+                        .insert({ 
+                            id: currentUser.id, 
+                            terms_accepted_at: new Date().toISOString() 
+                        })
                         .select()
                         .single();
         
