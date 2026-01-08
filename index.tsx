@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
@@ -630,6 +631,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">R$</span>
                             <input 
                                 type="number" 
+                                step="0.01"
                                 placeholder="0.00" 
                                 value={profile.service_price || ''} 
                                 onChange={e => setProfile(p => ({ ...p, service_price: parseFloat(e.target.value) }))}
