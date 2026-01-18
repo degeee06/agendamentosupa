@@ -8,6 +8,21 @@ export interface Profile {
   role: 'super_admin' | 'admin' | 'employee';
 }
 
+// FIX: Added Appointment types used by the Dashboard and other components.
+export type AppointmentStatus = 'Pendente' | 'Confirmado' | 'Cancelado' | 'Aguardando Pagamento';
+
+export interface Appointment {
+  id: string;
+  created_at: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  date: string;
+  time: string;
+  status: AppointmentStatus;
+  user_id: string;
+}
+
 export interface AttendanceRecord {
   id?: number;
   user_id: string;

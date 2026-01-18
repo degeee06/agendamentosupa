@@ -8,6 +8,8 @@ declare global {
     readonly VITE_PRODUCTION_URL: string;
     readonly VITE_MP_CLIENT_ID: string;
     readonly VITE_MP_REDIRECT_URL: string;
+    // FIX: Added RevenueCat key to the environment variables type definition.
+    readonly VITE_REVENUECAT_ANDROID_KEY: string;
   }
 
   interface ImportMeta {
