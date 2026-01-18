@@ -8,7 +8,7 @@ declare global {
     readonly VITE_PRODUCTION_URL: string;
     readonly VITE_MP_CLIENT_ID: string;
     readonly VITE_MP_REDIRECT_URL: string;
-    // FIX: Added RevenueCat key to the environment variables type definition.
+    // FIX: Added VITE_REVENUECAT_ANDROID_KEY to allow its usage in index.tsx.
     readonly VITE_REVENUECAT_ANDROID_KEY: string;
   }
 
