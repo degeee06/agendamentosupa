@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -14,7 +14,7 @@ declare let jspdf: any;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
-const REVENUECAT_ANDROID_KEY = import.meta.env.VITE_REVENUECAT_ANDROID_KEY || "test_tPLkutsSqzCqknrDsjizNHfoZIc";
+const REVENUECAT_ANDROID_KEY = import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
   const missingVars = [
@@ -114,9 +114,11 @@ const MailIcon = (props: any) => <Icon {...props}><path d="M4 4h16c1.1 0 2 .9 2 
 const PhoneIcon = (props: any) => <Icon {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></Icon>;
 const LinkIcon = (props: any) => <Icon {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></Icon>;
 const LogOutIcon = (props: any) => <Icon {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></Icon>;
-const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
+const AlertCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></Icon>;
+const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line></Icon>;
 const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
 const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
+const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
 const ChevronLeftIcon = (props: any) => <Icon {...props}><polyline points="15 18 9 12 15 6"></polyline></Icon>;
 const ChevronRightIcon = (props: any) => <Icon {...props}><polyline points="9 18 15 12 9 6"></polyline></Icon>;
 const DownloadIcon = (props: any) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></Icon>;
@@ -124,8 +126,6 @@ const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y
 const ChatBubbleIcon = (props: any) => <Icon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></Icon>;
 const MenuIcon = (props: any) => <Icon {...props}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></Icon>;
 const RefreshIcon = (props: any) => <Icon {...props}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></Icon>;
-const AlertCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></Icon>;
-const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line></Icon>;
 
 
 // --- Componentes de UI ---
@@ -160,7 +160,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, onUpdate
             <h3 className="text-lg font-bold text-white">{appointment.name}</h3>
             {appointment.phone && <p className="text-sm text-gray-400">{maskPhone(appointment.phone)}</p>}
           </div>
-          <StatusBadge status={appointment.status} />
+          <StatusBadge status={appointment['status']} />
         </div>
         <div className="border-t border-gray-700/50 my-4"></div>
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0 text-sm text-gray-300">
@@ -232,11 +232,11 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Novo Agendamento">
             <form onSubmit={handleSubmit} className="space-y-4">
-                <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                <input type="tel" placeholder="Telefone" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                <button type="submit" disabled={isSaving} className="w-full bg-white text-black font-bold py-3 rounded-lg disabled:opacity-50">
+                <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="tel" placeholder="Telefone" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <button type="submit" disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Agendamento'}
                 </button>
             </form>
@@ -266,11 +266,10 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
 const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile | null, setProfile: React.Dispatch<React.SetStateAction<Profile | null>>}) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('Todos');
+    const [statusFilter, setStatusFilter] = useState<'Todos' | Appointment['status']>('Todos');
     const [isLoading, setIsLoading] = useState(true);
 
     const TRIAL_LIMIT = 5;
@@ -287,16 +286,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             const { result } = await RevenueCatUI.presentPaywall();
             
             if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
-                // Notifica a edge function para validar e atualizar o DB
+                // Sincroniza com o backend via edge function de validação
                 await supabase.functions.invoke('verify-google-purchase');
                 
-                // Atualiza estado local
+                // Atualiza estado local para refletir mudança imediata
                 setProfile(prev => prev ? { ...prev, plan: 'premium' } : null);
                 setIsUpgradeModalOpen(false);
                 alert("Assinatura confirmada! Agora você é Premium.");
             }
         } catch (e) {
-            console.error("Erro no Paywall:", e);
+            console.error("Erro ao abrir Paywall:", e);
         }
     };
 
@@ -324,7 +323,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         const { data, error } = await supabase.from('appointments').insert({ name, phone, email, date, time, user_id: user.id, status: 'Confirmado' }).select().single();
         if (!error && data) {
             setAppointments(prev => [data, ...prev]);
-            // Incrementa uso diário localmente
             if (profile?.plan === 'trial') {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = (profile.last_usage_date === today ? profile.daily_usage : 0) + 1;
@@ -350,7 +348,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
     return (
         <div className="flex h-screen bg-black">
-            {/* Sidebar Simples */}
             <aside className={`fixed md:relative h-full w-64 glassmorphism p-6 flex flex-col z-40 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                 <div className="flex items-center space-x-2 mb-10">
                     <CalendarIcon className="w-8 h-8 text-white" />
@@ -365,7 +362,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
             <main className="flex-1 flex flex-col overflow-y-auto">
                 <header className="glassmorphism p-6 flex justify-between items-center sticky top-0 z-20">
-                    <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden"><MenuIcon /></button>
+                    <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-white"><MenuIcon /></button>
                     <h2 className="text-2xl font-bold">Início</h2>
                     <div className="flex items-center gap-4">
                         {profile?.plan === 'premium' ? (
@@ -381,9 +378,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
                 <div className="p-6">
                     <div className="flex flex-col md:flex-row gap-4 mb-6">
-                        <input type="text" placeholder="Pesquisar cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 bg-black/20 border border-gray-700 rounded-lg p-3 text-white" />
-                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-black/20 border border-gray-700 rounded-lg p-3 text-white">
-                            <option>Todos</option><option>Confirmado</option><option>Pendente</option><option>Cancelado</option>
+                        <input type="text" placeholder="Pesquisar cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 bg-black/20 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="bg-black/20 border border-gray-700 rounded-lg p-3 text-white">
+                            <option value="Todos">Todos</option>
+                            <option value="Confirmado">Confirmado</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Cancelado">Cancelado</option>
                         </select>
                     </div>
 
@@ -411,7 +411,7 @@ const App = () => {
         async function init() {
             try {
                 // 1. Configura RevenueCat se for nativo
-                if (Capacitor.isNativePlatform()) {
+                if (Capacitor.isNativePlatform() && REVENUECAT_ANDROID_KEY) {
                     await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
                     await Purchases.configure({ apiKey: REVENUECAT_ANDROID_KEY });
                 }
@@ -425,8 +425,7 @@ const App = () => {
                     if (Capacitor.isNativePlatform()) {
                         try {
                             const { customerInfo } = await Purchases.getCustomerInfo();
-                            // ID do entitlement definido no Dashboard do RevenueCat
-                            const entitlementId = "premium"; 
+                            const entitlementId = "premium"; // Deve bater com o ID no dashboard do RevenueCat
                             
                             if (typeof customerInfo.entitlements.active[entitlementId] !== "undefined") {
                                 if (prof && prof.plan !== 'premium') {
@@ -435,7 +434,7 @@ const App = () => {
                                 }
                             }
                         } catch (e) {
-                            console.error("Erro ao checar assinaturas:", e);
+                            console.error("Erro ao verificar entitlements:", e);
                         }
                     }
 
@@ -443,12 +442,25 @@ const App = () => {
                     setProfile(prof);
                 }
             } catch (e) {
-                console.error("Erro na inicialização:", e);
+                console.error("Erro ao inicializar aplicativo:", e);
             } finally {
                 setIsLoading(false);
             }
         }
         init();
+
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                const { data: prof } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+                setUser({ id: session.user.id, email: session.user.email });
+                setProfile(prof);
+            } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setProfile(null);
+            }
+        });
+
+        return () => authListener.subscription.unsubscribe();
     }, []);
 
     if (isLoading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-16 h-16 text-white" /></div>;
@@ -462,7 +474,7 @@ const App = () => {
             <p className="text-gray-400 mb-8 text-center">Entre com sua conta Google para gerenciar seus horários.</p>
             <button 
                 onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: PRODUCTION_URL } })}
-                className="bg-white text-black font-bold py-4 px-8 rounded-xl flex items-center gap-3"
+                className="bg-white text-black font-bold py-4 px-8 rounded-xl flex items-center gap-3 hover:bg-gray-200 transition-colors"
             >
                 <svg className="w-6 h-6" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35 11.1h-9.17v2.73h5.14c-.22 1.2-1.15 3.03-2.87 4.23l2.31 1.79c1.35-1.24 2.13-3.08 2.13-5.26 0-.5-.05-.88-.13-1.49zM12.18 18.28c-2.3 0-4.25-1.52-4.95-3.59l-2.38 1.84c1.44 2.86 4.41 4.82 7.87 4.82 2.16 0 3.97-.72 5.3-1.94l-2.31-1.79c-.37.24-.92.42-1.53.42zM7.23 11.1c-.13.4-.21.82-.21 1.27s.08.87.21 1.27l2.38-1.84c-.05-.22-.08-.45-.08-.7s.03-.48.08-.7L7.23 11.1zM12.18 6.05c1.5 0 2.53.65 3.11 1.2l2.31-2.31c-1.5-1.4-3.45-2.25-5.42-2.25-3.46 0-6.43 1.96-7.87 4.82l2.38 1.84c.7-2.07 2.65-3.59 4.95-3.59z"/></svg>
                 Entrar com Google

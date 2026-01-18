@@ -1,18 +1,5 @@
 export type DayKey = 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
 
-// FIX: Added Appointment type and exported it to resolve import error in components/DashboardView.tsx.
-export type Appointment = {
-  id: string;
-  created_at: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  date: string;
-  time: string;
-  status: 'Pendente' | 'Confirmado' | 'Cancelado' | 'Aguardando Pagamento';
-  user_id: string;
-};
-
 export interface Profile {
   id: string; // uuid from auth.users
   updated_at?: string;

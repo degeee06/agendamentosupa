@@ -1,14 +1,13 @@
+
 // FIX: The type declarations for `import.meta.env` must be wrapped in `declare global`
 // to correctly augment the global `ImportMeta` type from within a module context.
 declare global {
   interface ImportMetaEnv {
     readonly VITE_SUPABASE_URL: string;
     readonly VITE_SUPABASE_ANON_KEY: string;
-    // FIX: Add VITE_PRODUCTION_URL to the environment variable types to resolve a TypeScript error in index.tsx.
     readonly VITE_PRODUCTION_URL: string;
     readonly VITE_MP_CLIENT_ID: string;
     readonly VITE_MP_REDIRECT_URL: string;
-    // FIX: Added VITE_REVENUECAT_ANDROID_KEY to allow its usage in index.tsx.
     readonly VITE_REVENUECAT_ANDROID_KEY: string;
   }
 
