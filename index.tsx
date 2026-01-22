@@ -1502,7 +1502,7 @@ const LoginPage = () => {
     return (
         <>
             <div className="min-h-[100dvh] bg-black flex flex-col justify-center items-center p-4">
-                <div className="text-center w-full max-sm">
+                <div className="text-center w-full max-w-sm">
                      <CalendarIcon className="w-16 h-16 text-white mx-auto mb-4" />
                      <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">Oubook</h1>
                      <p className="text-base sm:text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
