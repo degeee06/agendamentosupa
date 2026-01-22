@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
@@ -391,7 +390,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
             setGeneratedLink(newLink);
         } catch (err: any) {
             console.error("Erro ao gerar link:", err);
-            setError("Não foi possível gerar o link. Tente novamente.");
+            setError("Não foi possível gerar the link. Tente novamente.");
         } finally {
             setIsGenerating(false);
         }
@@ -1319,7 +1318,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     
     if (bookingCompleted) {
         return (
-            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
+            <div className="min-h-[100dvh] bg-black flex justify-center items-center text-center p-4">
                 <div className="glassmorphism rounded-2xl p-8 max-w-xs w-full">
                     <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
                     <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Agendamento Concluído</h1>
@@ -1332,12 +1331,12 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     }
 
     if (linkStatus === 'loading') {
-        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+        return <div className="min-h-[100dvh] bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     if (linkStatus === 'invalid' || linkStatus === 'used') {
         return (
-            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
+            <div className="min-h-[100dvh] bg-black flex justify-center items-center text-center p-4">
                 <div className="glassmorphism rounded-2xl p-8 max-w-sm w-full">
                     <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
                     <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">{linkStatus === 'used' ? 'Link Utilizado' : 'Link Inválido'}</h1>
@@ -2085,6 +2084,7 @@ const App = () => {
                 const currentUser = session.user;
                 let { data: userProfile, error: profileError } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
                 if (profileError && profileError.code === 'PGRST116') { 
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
                     const { data: newProfile } = await supabase.from('profiles').insert({ id: currentUser.id, terms_accepted_at: new Date().toISOString() }).select().single();
                     userProfile = newProfile;
                 }
@@ -2123,7 +2123,7 @@ const App = () => {
         return null;
     }, [path, user, profile, isLoading]);
 
-    if (isLoading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-16 h-16 text-white"/></div>;
+    if (isLoading) return <div className="min-h-[100dvh] bg-black flex justify-center items-center"><LoaderIcon className="w-16 h-16 text-white"/></div>;
     return router;
 };
 
