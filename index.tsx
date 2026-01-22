@@ -6,7 +6,8 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Purchases } from '@revenuecat/purchases-capacitor';
-
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 declare let jspdf: any;
 
@@ -740,9 +741,9 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
                 </p>
                 <button 
                     onClick={onUpgrade}
-                    className="hotmart-fb hotmart__button-checkout w-full"
+                    className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-white font-black py-4 px-6 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
                 >
-                    🚀 Fazer Upgrade Ilimitado
+                    🚀 FAZER UPGRADE PREMIUM
                 </button>
             </div>
         </Modal>
@@ -1836,7 +1837,19 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         setIsAssistantLoading(true);
     
         try {
+            // BUSCAR DADOS DE FATURAMENTO PARA O CONTEXTO DA IA
+            const { data: paymentsData } = await supabase
+                .from('payments')
+                .select('amount, created_at')
+                .eq('status', 'approved');
+
+            const totalEarned = paymentsData?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0;
+            const recentEarnings = paymentsData?.slice(-10).map(p => `R$ ${p.amount} em ${new Date(p.created_at).toLocaleDateString('pt-BR')}`).join(', ') || 'Nenhum';
+
             const context = `
+                - FATURAMENTO TOTAL APROVADO: R$ ${totalEarned.toFixed(2)}
+                - ÚLTIMOS GANHOS: ${recentEarnings}
+                - PREÇO DO SEU SERVIÇO: R$ ${businessProfile?.service_price || 0}
                 - Dias de trabalho: ${JSON.stringify(businessProfile?.working_days)}
                 - Horário de funcionamento: De ${businessProfile?.start_time} a ${businessProfile?.end_time}
                 - Datas bloqueadas: ${JSON.stringify(businessProfile?.blocked_dates)}
@@ -1922,7 +1935,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
     };
     
-    const handleDownloadPDF = () => {
+    const handleDownloadPDF = async () => {
         if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
             console.error("jsPDF library not loaded.");
             alert("Não foi possível gerar o PDF. Por favor, recarregue a página e tente novamente.");
@@ -1955,8 +1968,33 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             theme: 'striped',
             headStyles: { fillColor: [28, 28, 30] },
         });
+
+        const fileName = "agendamentos.pdf";
     
-        doc.save("agendamentos.pdf");
+        if (Capacitor.isNativePlatform()) {
+            try {
+                // Para Capacitor, geramos o base64 e usamos Filesystem e Share
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                
+                const result = await Filesystem.writeFile({
+                    path: fileName,
+                    data: pdfBase64,
+                    directory: Directory.Cache
+                });
+
+                await Share.share({
+                    title: 'Relatório de Agendamentos',
+                    text: 'Aqui está o seu relatório de agendamentos em PDF.',
+                    url: result.uri,
+                    dialogTitle: 'Abrir/Compartilhar Relatório'
+                });
+            } catch (err) {
+                console.error("Erro ao processar PDF no mobile:", err);
+                alert("Não foi possível gerar ou compartilhar o PDF no dispositivo.");
+            }
+        } else {
+            doc.save(fileName);
+        }
     };
 
     const handleLogout = async () => {
@@ -2083,11 +2121,11 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         <span className="font-bold text-white">Plano Premium</span>
                     </div>
                 ) : (
-                    <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3">
+                    <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3 border-yellow-500/30 border">
                         <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
                         <button
                             onClick={handleUpgrade}
-                            className="bg-gradient-to-right from-amber-500 to-orange-600 text-white font-bold py-2 px-4 rounded-xl shadow-lg hover:translate-y-[-2px] transition-all"
+                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-white font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
                         >
                             UPGRADE
                         </button>
