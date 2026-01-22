@@ -377,7 +377,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
         setError(null);
         setCopied(false);
         try {
-            const { data, error } = await supabase
+            const { data, error = null } = await supabase
                 .from('one_time_links')
                 .insert({ user_id: userId })
                 .select('id')
@@ -492,7 +492,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             ...profile,
             service_price: profile.service_price ? parseFloat(profile.service_price as any) : 0
         };
-        const { error } = await supabase.from('business_profiles').upsert(profileToSave, { onConflict: 'user_id' });
+        const { error = null } = await supabase.from('business_profiles').upsert(profileToSave, { onConflict: 'user_id' });
         if (error) {
             console.error("Erro ao salvar perfil de negócio:", error);
         } else {
@@ -522,7 +522,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         if (!confirmDisconnect) return;
 
         setIsLoading(true);
-        const { error } = await supabase
+        const { error = null } = await supabase
             .from('mp_connections')
             .delete()
             .eq('user_id', userId);
@@ -899,7 +899,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
             try {
                 setLinkStatus('loading');
-                const { data: linkData, error: linkError } = await supabase
+                const { data: linkData, error: linkError = null } = await supabase
                     .from('one_time_links')
                     .select('user_id, is_used, appointment_id')
                     .eq('id', tokenId)
@@ -914,7 +914,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 if (linkData.is_used) {
                     if (linkData.appointment_id) {
                         // O link foi usado, mas vamos ver se o agendamento ainda está "Aguardando Pagamento"
-                        const { data: appt } = await supabase
+                        const { data: appt = null } = await supabase
                             .from('appointments')
                             .select('*')
                             .eq('id', linkData.appointment_id)
@@ -942,7 +942,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                             setSelectedTime(appt.time);
 
                             // Buscar dados do pagamento existente para mostrar o QR Code de novo
-                             const { data: existingPayment } = await supabase
+                             const { data: existingPayment = null } = await supabase
                                 .from('payments')
                                 .select('*')
                                 .eq('appointment_id', appt.id)
@@ -951,10 +951,10 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                             if (existingPayment) {
                                 // Tenta buscar os dados completos do pagamento (QR Code) novamente via Edge Function
                                 try {
-                                    const { data: qrData, error: qrError } = await supabase.functions.invoke('create-payment', {
+                                    const { data: qrData, error: qrError = null } = await supabase.functions.invoke('create-payment', {
                                         body: {
                                             action: 'retrieve',
-                                            paymentId: existingPayment.mp_payment_id,
+                                            paymentId: (existingPayment as any).mp_payment_id,
                                             professionalId: linkData.user_id
                                         }
                                     });
@@ -965,8 +965,8 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                         console.warn("Falha ao recuperar QR Code completo:", qrData?.error);
                                         // Fallback: usa dados parciais do banco (sem imagem QR)
                                         setPaymentData({
-                                            id: parseInt(existingPayment.mp_payment_id),
-                                            status: existingPayment.status,
+                                            id: parseInt((existingPayment as any).mp_payment_id),
+                                            status: (existingPayment as any).status,
                                             qr_code: '', 
                                             qr_code_base64: '',
                                             ticket_url: ''
@@ -975,8 +975,8 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                 } catch (e) {
                                     console.error("Erro na chamada da Edge Function para recuperar QR Code:", e);
                                      setPaymentData({
-                                        id: parseInt(existingPayment.mp_payment_id),
-                                        status: existingPayment.status,
+                                        id: parseInt((existingPayment as any).mp_payment_id),
+                                        status: (existingPayment as any).status,
                                         qr_code: '',
                                         qr_code_base64: '',
                                         ticket_url: ''
@@ -1155,15 +1155,23 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             
         const blockedRecurringTimes = businessProfile.blocked_times[dayOfWeek] || [];
 
-        return slots.filter(slot => 
-            !bookedTimes.includes(slot) && 
-            !blockedRecurringTimes.includes(slot)
-        );
+        const now = new Date();
+        const localTodayString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const currentHour = now.getHours();
+
+        return slots.filter(slot => {
+            const [slotHour] = slot.split(':').map(Number);
+            const isPastTimeToday = (dateString === localTodayString) && (slotHour <= currentHour);
+
+            return !isPastTimeToday && 
+                   !bookedTimes.includes(slot) && 
+                   !blockedRecurringTimes.includes(slot);
+        });
     }, [selectedDate, businessProfile, appointments, dayMap]);
     
     const handlePayment = async (appointmentId: string, amount: number) => {
         try {
-            const { data, error } = await supabase.functions.invoke('create-payment', {
+            const { data, error = null } = await supabase.functions.invoke('create-payment', {
                 body: {
                     amount: amount,
                     description: `Agendamento ${name}`,
@@ -1173,8 +1181,8 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 }
             });
             
-            if (error || data.error) {
-                throw new Error(data?.error || error?.message || 'Erro ao gerar Pix');
+            if (error || (data && data.error)) {
+                throw new Error((data && data.error) || (error && (error as any).message) || 'Erro ao gerar Pix');
             }
             
             setPaymentData(data);
@@ -1476,7 +1484,7 @@ const LoginPage = () => {
     
             if (isNative) {
                 // For native, we get the URL and open it in the Capacitor Browser
-                const { data, error } = await supabase.auth.signInWithOAuth({
+                const { data, error = null } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
                         redirectTo,
@@ -1489,7 +1497,7 @@ const LoginPage = () => {
                 }
             } else {
                 // For web, Supabase handles the redirect automatically
-                const { error } = await supabase.auth.signInWithOAuth({
+                const { error = null } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
                         redirectTo,
