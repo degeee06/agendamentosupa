@@ -1,77 +1,87 @@
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
+// FIX: Declare Deno to satisfy TypeScript type checker in non-Deno environments.
 declare const Deno: any;
 
+const DenoEnv = (Deno as any).env;
+
+// Headers CORS para permitir chamadas externas (RevenueCat)
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+serve(async (req) => {
+  // Lida com requisições de preflight do navegador
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const body = await req.json();
+    
+    // O RevenueCat envia os dados dentro do objeto 'event'
+    const event = body.event;
+    if (!event) throw new Error("Evento inválido do RevenueCat");
+
+    const appUserId = event.app_user_id; // Este é o ID do usuário no Supabase
+    const eventType = event.type;
+    const expirationMs = event.expiration_at_ms;
+
+    // Inicializa o cliente Admin do Supabase para ignorar RLS e atualizar perfis
+    const supabase = createClient(
+      DenoEnv.get("SUPABASE_URL")!,
+      DenoEnv.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const body = await req.json();
-    const event = body.event;
-    const userId = event.app_user_id; // O UUID do usuário no Supabase
-    const type = event.type;
+    console.log(`Processando evento ${eventType} para o usuário ${appUserId}`);
 
-    console.log(`Recebido evento ${type} para o usuário ${userId}`);
+    // Lógica principal: Compras iniciais e renovações
+    if (
+      eventType === 'INITIAL_PURCHASE' || 
+      eventType === 'RENEWAL' || 
+      eventType === 'UNCANCELLATION' ||
+      eventType === 'NON_RENEWING_PURCHASE'
+    ) {
+      if (expirationMs) {
+        const expiresAt = new Date(expirationMs).toISOString();
+        
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            plan: 'premium',
+            premium_expires_at: expiresAt
+          })
+          .eq('id', appUserId);
 
-    let newPlan = 'trial';
+        if (error) throw error;
+        console.log(`Usuário ${appUserId} atualizado para Premium até ${expiresAt}`);
+      }
+    } 
     
-    // Lista de eventos que garantem status Premium
-    const premiumEvents = [
-        'INITIAL_PURCHASE',
-        'RENEWAL',
-        'RESTORE',
-        'UNCANCELLATION'
-    ];
+    // Lógica para quando a assinatura expira de fato
+    else if (eventType === 'EXPIRATION' || eventType === 'BILLING_ISSUE') {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          plan: 'trial',
+          premium_expires_at: null
+        })
+        .eq('id', appUserId);
 
-    // Lista de eventos que removem status Premium
-    const expirationEvents = [
-        'EXPIRATION',
-        'CANCELLATION',
-        'BILLING_ISSUE',
-        'REFUND'
-    ];
-
-    if (premiumEvents.includes(type)) {
-        newPlan = 'premium';
-    } else if (expirationEvents.includes(type)) {
-        newPlan = 'trial';
-    } else {
-        // Para outros eventos, não alteramos nada
-        return new Response(JSON.stringify({ message: 'Evento ignorado' }), { status: 200 });
+      if (error) throw error;
+      console.log(`Usuário ${appUserId} revertido para Trial por expiração.`);
     }
 
-    const { error } = await supabaseAdmin
-      .from('profiles')
-      .update({ 
-          plan: newPlan,
-          // Se for premium, podemos definir uma data de expiração baseada no evento se desejar
-      })
-      .eq('id', userId);
-
-    if (error) throw error;
-
     return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (error) {
-    console.error('Erro no Webhook:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  } catch (e: any) {
+    console.error("Erro no Webhook RevenueCat:", e.message);
+    return new Response(JSON.stringify({ error: e.message }), {
       status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
