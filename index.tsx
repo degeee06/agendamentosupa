@@ -741,7 +741,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
                 </p>
                 <button 
                     onClick={onUpgrade}
-                    className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-white font-black py-4 px-6 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-4 px-6 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
                 >
                     🚀 FAZER UPGRADE PREMIUM
                 </button>
@@ -1065,7 +1065,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             const checkStatus = async () => {
                 try {
                     // Chama o webhook manualmente apenas para verificar (silent check)
-                    const { data, error } = await supabase.functions.invoke('mp-webhook', {
+                    const { data, error = null } = await supabase.functions.invoke('mp-webhook', {
                         body: {
                             id: paymentData.id.toString(),
                             action: 'payment.updated'
@@ -1093,7 +1093,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const handleManualVerification = async (paymentId: number) => {
         try {
             // Tenta chamar o webhook manualmente para forçar a verificação
-            const { data, error } = await supabase.functions.invoke('mp-webhook', {
+            const { data, error = null } = await supabase.functions.invoke('mp-webhook', {
                 body: {
                     id: paymentId.toString(),
                     action: 'payment.updated'
@@ -1217,7 +1217,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         
         try {
             const dateString = selectedDate.toISOString().split('T')[0];
-            const { data, error } = await supabase.functions.invoke('book-appointment-public', {
+            const { data, error = null } = await supabase.functions.invoke('book-appointment-public', {
                 body: {
                     tokenId: tokenId,
                     name: name,
@@ -1320,7 +1320,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     
     if (bookingCompleted) {
         return (
-            <div className="min-h-[100dvh] bg-black flex justify-center items-center text-center p-4">
+            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
                 <div className="glassmorphism rounded-2xl p-8">
                     <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
                     <h1 className="text-2xl font-bold text-white mb-2">Agendamento Concluído</h1>
@@ -1333,12 +1333,12 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     }
 
     if (linkStatus === 'loading') {
-        return <div className="min-h-[100dvh] bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     if (linkStatus === 'invalid' || linkStatus === 'used') {
         return (
-            <div className="min-h-[100dvh] bg-black flex justify-center items-center text-center p-4">
+            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
                 <div className="glassmorphism rounded-2xl p-8">
                     <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
                     <h1 className="text-2xl font-bold text-white mb-2">{linkStatus === 'used' ? 'Link Utilizado' : 'Link Inválido'}</h1>
@@ -1354,80 +1354,82 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     }
 
     return (
-        <div className="min-h-[100dvh] bg-black flex flex-col justify-center items-center p-4">
-            <div className="w-full max-w-md mx-auto">
-                <div className="glassmorphism rounded-2xl p-6 sm:p-8">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
-                    <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
+        <div className="min-h-screen bg-black p-4">
+            <div className="flex flex-col justify-center items-center">
+                <div className="w-full max-w-md mx-auto py-8">
+                    <div className="glassmorphism rounded-2xl p-6 sm:p-8">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
+                        <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
 
-                    {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
-                    
-                    {pendingAppointmentId ? (
-                        <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lg mb-6 text-center">
-                            <p className="text-yellow-200 font-bold mb-2">Pagamento Pendente</p>
-                            <p className="text-sm text-gray-300 mb-4">Você já iniciou este agendamento. Finalize o pagamento para confirmar.</p>
-                            
-                            <div className="flex flex-col gap-2">
-                                <button 
-                                    onClick={handleSubmit}
-                                    className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded w-full transition-colors"
-                                >
-                                    Abrir Pagamento Pix
-                                </button>
+                        {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
+                        
+                        {pendingAppointmentId ? (
+                            <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lg mb-6 text-center">
+                                <p className="text-yellow-200 font-bold mb-2">Pagamento Pendente</p>
+                                <p className="text-sm text-gray-300 mb-4">Você já iniciou este agendamento. Finalize o pagamento para confirmar.</p>
                                 
-                                {paymentData && (
+                                <div className="flex flex-col gap-2">
                                     <button 
-                                        onClick={() => handleManualVerification(paymentData.id)}
-                                        className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 font-bold py-2 px-4 rounded w-full transition-colors flex items-center justify-center gap-2"
+                                        onClick={handleSubmit}
+                                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded w-full transition-colors"
                                     >
-                                        <RefreshIcon className="w-4 h-4" />
-                                        Já realizei o pagamento
+                                        Abrir Pagamento Pix
                                     </button>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                            <input type="tel" placeholder="Seu Telefone (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                            <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
-                            
-                            <Calendar />
-
-                            {selectedDate && (
-                                <div>
-                                    <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
-                                    {availableTimeSlots.length > 0 ? (
-                                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                            {availableTimeSlots.map(time => (
-                                                <button 
-                                                    key={time} 
-                                                    type="button"
-                                                    onClick={() => setSelectedTime(time)}
-                                                    className={`p-2 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
-                                                >
-                                                    {time}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
+                                    
+                                    {paymentData && (
+                                        <button 
+                                            onClick={() => handleManualVerification(paymentData.id)}
+                                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 font-bold py-2 px-4 rounded w-full transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <RefreshIcon className="w-4 h-4" />
+                                            Já realizei o pagamento
+                                        </button>
                                     )}
                                 </div>
-                            )}
-                            
-                            {businessProfile?.service_price && businessProfile.service_price > 0 && (
-                                <div className="bg-gray-800 p-4 rounded-lg text-center">
-                                    <p className="text-gray-400 text-sm">Valor do Serviço</p>
-                                    <p className="text-2xl font-bold text-white">R$ {businessProfile.service_price.toFixed(2)}</p>
-                                </div>
-                            )}
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                <input type="tel" placeholder="Seu Telefone (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                
+                                <Calendar />
 
-                            <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
-                            </button>
-                        </form>
-                    )}
+                                {selectedDate && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
+                                        {availableTimeSlots.length > 0 ? (
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                                {availableTimeSlots.map(time => (
+                                                    <button 
+                                                        key={time} 
+                                                        type="button"
+                                                        onClick={() => setSelectedTime(time)}
+                                                        className={`p-2 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {businessProfile?.service_price && businessProfile.service_price > 0 && (
+                                    <div className="bg-gray-800 p-4 rounded-lg text-center">
+                                        <p className="text-gray-400 text-sm">Valor do Serviço</p>
+                                        <p className="text-2xl font-bold text-white">R$ {businessProfile.service_price.toFixed(2)}</p>
+                                    </div>
+                                )}
+
+                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
+                                </button>
+                            </form>
+                        )}
+                    </div>
                 </div>
             </div>
             
@@ -1502,7 +1504,7 @@ const LoginPage = () => {
 
     return (
         <>
-            <div className="min-h-[100dvh] bg-black flex flex-col justify-center items-center p-4">
+            <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
                 <div className="text-center w-full max-w-sm">
                      <CalendarIcon className="w-16 h-16 text-white mx-auto mb-4" />
                      <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">Oubook</h1>
@@ -1648,7 +1650,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         const to = from + APPOINTMENTS_PAGE_SIZE - 1;
     
         try {
-            const { data: newAppointments, error } = await supabase
+            const { data: newAppointments, error = null } = await supabase
                 .from('appointments')
                 .select('*')
                 .eq('user_id', user.id)
@@ -1747,7 +1749,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 console.log('Push registration success, token:', token.value);
                 // Utiliza a Edge Function para registrar o token,
                 // garantindo que o token do dispositivo seja associado ao usuário logado no momento.
-                const { error } = await supabase.functions.invoke('register-push-token', {
+                const { error = null } = await supabase.functions.invoke('register-push-token', {
                     body: { token: token.value }
                 });
 
@@ -1792,7 +1794,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             return;
         }
 
-        const { data: newAppointment, error } = await supabase
+        const { data: newAppointment, error = null } = await supabase
             .from('appointments')
             .insert({ name, phone, email, date, time, user_id: user.id, status: 'Confirmado' }) // Agendamento manual já nasce confirmado? Ou pendente? Geralmente confirmado se o próprio dono cria.
             .select()
@@ -1813,7 +1815,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             if (profile.plan === 'trial') {
                 const today = new Date().toISOString().split('T')[0];
                 const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
-                const { data: updatedProfile, error: profileError } = await supabase
+                const { data: updatedProfile, error: profileError = null } = await supabase
                     .from('profiles')
                     .update({ daily_usage: newUsage, last_usage_date: today })
                     .eq('id', user.id)
@@ -1838,13 +1840,13 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     
         try {
             // BUSCAR DADOS DE FATURAMENTO PARA O CONTEXTO DA IA
-            const { data: paymentsData } = await supabase
+            const { data: paymentsData = null } = await supabase
                 .from('payments')
                 .select('amount, created_at')
                 .eq('status', 'approved');
 
-            const totalEarned = paymentsData?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0;
-            const recentEarnings = paymentsData?.slice(-10).map(p => `R$ ${p.amount} em ${new Date(p.created_at).toLocaleDateString('pt-BR')}`).join(', ') || 'Nenhum';
+            const totalEarned = (paymentsData as any[])?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0;
+            const recentEarnings = (paymentsData as any[])?.slice(-10).map(p => `R$ ${p.amount} em ${new Date(p.created_at).toLocaleDateString('pt-BR')}`).join(', ') || 'Nenhum';
 
             const context = `
                 - FATURAMENTO TOTAL APROVADO: R$ ${totalEarned.toFixed(2)}
@@ -1857,7 +1859,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 - Agendamentos existentes (ocupados): ${JSON.stringify(appointments.filter(a => a.status !== 'Cancelado').map(a => ({ date: a.date, time: a.time })))}
             `;
 
-            const { data, error } = await supabase.functions.invoke('deepseek-assistant', {
+            const { data, error = null } = await supabase.functions.invoke('deepseek-assistant', {
                 body: {
                   messages: currentMessages.map(m => ({
                     role: m.sender === 'ai' ? 'assistant' : m.sender,
@@ -1904,7 +1906,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         );
     
         // 3. Realiza a operação no banco de dados em segundo plano.
-        const { error } = await supabase
+        const { error = null } = await supabase
             .from('appointments')
             .update({ status })
             .eq('id', id);
@@ -1921,7 +1923,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const handleDeleteAppointment = async (id: string) => {
         const isConfirmed = window.confirm('Tem certeza que deseja excluir este agendamento? Esta ação é permanente e não pode ser desfeita.');
         if (isConfirmed) {
-            const { error } = await supabase
+            const { error = null } = await supabase
                 .from('appointments')
                 .delete()
                 .eq('id', id);
@@ -1998,7 +2000,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     };
 
     const handleLogout = async () => {
-        const { error } = await supabase.auth.signOut();
+        const { error = null } = await supabase.auth.signOut();
     
         if (error) {
             // Apenas registra o erro no console para depuração. Não exibe um alerta para o usuário
@@ -2023,7 +2025,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             // Verifica se a compra foi aprovada
             if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
               // Atualize o status no seu Supabase aqui
-              const { data: updatedProfile, error: profileError } = await supabase
+              const { data: updatedProfile, error: profileError = null } = await supabase
                 .from('profiles')
                 .update({ plan: 'premium' })
                 .eq('id', user.id)
@@ -2125,7 +2127,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
                         <button
                             onClick={handleUpgrade}
-                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-white font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
+                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
                         >
                             UPGRADE
                         </button>
@@ -2248,7 +2250,7 @@ const App = () => {
             const connectMercadoPago = async () => {
                 setIsLoading(true);
                 try {
-                    const { data, error } = await supabase.functions.invoke('mercadopago-connect', {
+                    const { data, error = null } = await supabase.functions.invoke('mercadopago-connect', {
                         body: { code, state }
                     });
 
@@ -2292,7 +2294,7 @@ const App = () => {
             const refreshToken = params.get('refresh_token');
 
             if (accessToken && refreshToken) {
-                const { error } = await supabase.auth.setSession({
+                const { error = null } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken,
                 });
@@ -2318,7 +2320,7 @@ const App = () => {
         const syncUserAndProfile = async () => {
             setIsLoading(true);
             try {
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                const { data: { session }, error: sessionError = null } = await supabase.auth.getSession();
                 if (sessionError) throw sessionError;
                 if (!session) {
                     // No session, user is logged out.
@@ -2330,16 +2332,16 @@ const App = () => {
         
                 // Step 1: Fetch profile. This is the main validation point.
                 // If this fails (e.g., with a 406 error), the session is considered invalid.
-                let { data: userProfile, error: profileError } = await supabase
+                let { data: userProfile, error: profileError = null } = await supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', currentUser.id)
                     .single();
                 
                 // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
-                if (profileError && profileError.code === 'PGRST116') { 
+                if (profileError && (profileError as any).code === 'PGRST116') { 
                     const { data: { user: authUser } } = await supabase.auth.getUser();
-                    const { data: newProfile, error: insertError } = await supabase
+                    const { data: newProfile, error: insertError = null } = await supabase
                         .from('profiles')
                         .insert({ 
                             id: currentUser.id, 
@@ -2363,7 +2365,7 @@ const App = () => {
                 const premiumExpired = isPremium && userProfile.premium_expires_at && new Date(userProfile.premium_expires_at) < new Date();
         
                 if (premiumExpired) {
-                    const { data: revertedProfile } = await supabase
+                    const { data: revertedProfile = null } = await supabase
                         .from('profiles')
                         .update({ plan: 'trial', premium_expires_at: null })
                         .eq('id', currentUser.id)
@@ -2375,7 +2377,7 @@ const App = () => {
                 // Step 4: Check for daily usage reset for trial users
                 const today = new Date().toISOString().split('T')[0];
                 if (userProfile.plan === 'trial' && userProfile.last_usage_date !== today) {
-                    const { data: updatedProfile } = await supabase
+                    const { data: updatedProfile = null } = await supabase
                         .from('profiles')
                         .update({ daily_usage: 0, last_usage_date: today })
                         .eq('id', currentUser.id)
@@ -2446,7 +2448,7 @@ const App = () => {
 
     if (isLoading) {
         return (
-             <div className="min-h-[100dvh] bg-black flex justify-center items-center">
+             <div className="min-h-screen bg-black flex justify-center items-center">
                  <LoaderIcon className="w-16 h-16 text-white"/>
              </div>
         );
