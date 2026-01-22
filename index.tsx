@@ -123,7 +123,7 @@ const ClockIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10
 const CheckCircleIcon = (props: any) => <Icon {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></Icon>;
 const XCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></Icon>;
 const SearchIcon = (props: any) => <Icon {...props}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></Icon>;
-const PlusIcon = (props: any) => <Icon {...props}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
+const PlusIcon = (props: any) => <Icon {...props}><line x1="12" cy="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
 const UserIcon = (props: any) => <Icon {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></Icon>;
 const MailIcon = (props: any) => <Icon {...props}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></Icon>;
 const PhoneIcon = (props: any) => <Icon {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></Icon>;
@@ -675,7 +675,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                                         type="checkbox"
                                         checked={!!profile.working_days[key]}
                                         onChange={() => handleWorkingDayChange(key)}
-                                        className="h-5 w-5 accent-gray-400 bg-gray-700 border-gray-600 rounded focus:ring-gray-500"
+                                        className="h-5 w-5 accent-gray-400 bg-gray-800 border-gray-600 rounded focus:ring-gray-500"
                                     />
                                     <span className="text-white text-sm font-medium">{value}</span>
                                 </label>
@@ -1512,7 +1512,7 @@ const LoginPage = () => {
     return (
         <>
             <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
-                <div className="text-center w-full max-w-sm">
+                <div className="text-center w-full max-sm">
                      <CalendarIcon className="w-16 h-16 text-white mx-auto mb-4" />
                      <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">Oubook</h1>
                      <p className="text-base sm:text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
@@ -1984,33 +1984,35 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     };
 
     const handleUpgrade = async () => {
+      try {
         if (Capacitor.isNativePlatform()) {
-            try {
-                const offerings = await Purchases.getOfferings();
-                if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-                    const purchaseResult = await Purchases.purchasePackage({
-                        aPackage: offerings.current.availablePackages[0]
-                    });
-                    if (typeof purchaseResult.customerInfo.entitlements.active['premium'] !== "undefined") {
-                        const { data: updatedProfile, error: profileError } = await supabase
-                            .from('profiles')
-                            .update({ plan: 'premium' })
-                            .eq('id', user.id)
-                            .select()
-                            .single();
-                        if (updatedProfile) setProfile(updatedProfile);
-                        alert("Upgrade concluído com sucesso! Agora você é Premium.");
-                    }
-                }
-            } catch (e: any) {
-                if (!e.userCancelled) {
-                    console.error("Erro na compra:", e);
-                    alert("Ocorreu um erro ao processar a compra.");
-                }
+          const offerings = await Purchases.getOfferings();
+          if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
+            // Isso abre a interface nativa da Google Play Store
+            const purchaseResult = await Purchases.purchasePackage({ aPackage: offerings.current.availablePackages[0] });
+            const customerInfo = purchaseResult.customerInfo;
+
+            // Verifica se a compra foi aprovada
+            if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
+              // Atualize o status no seu Supabase aqui
+              const { data: updatedProfile, error: profileError } = await supabase
+                .from('profiles')
+                .update({ plan: 'premium' })
+                .eq('id', user.id)
+                .select()
+                .single();
+              if (updatedProfile) setProfile(updatedProfile);
+              alert("Upgrade realizado com sucesso!");
             }
+          }
         } else {
-            window.open("https://pay.hotmart.com/U102480243K?checkoutMode=2", "_blank");
+          window.open("https://pay.hotmart.com/U102480243K?checkoutMode=2", "_blank");
         }
+      } catch (e: any) {
+        if (!e.userCancelled) {
+          alert("Erro ao processar compra: " + (e.message || e));
+        }
+      }
     };
 
 
@@ -2205,6 +2207,21 @@ const App = () => {
     const [path, setPath] = useState(window.location.pathname);
 
     useEffect(() => {
+      const setupPurchases = async () => {
+        if (Capacitor.isNativePlatform()) {
+          try {
+            // Configure com a sua Chave Pública do RevenueCat vinda do env
+            await Purchases.configure({ apiKey: import.meta.env.VITE_REVENUECAT_ANDROID_KEY || 'goog_tXGzFUmdhKasrUrygDIgLxOVTPs' });
+            console.log("RevenueCat pronto!");
+          } catch (e) {
+            console.error("Erro ao configurar RevenueCat", e);
+          }
+        }
+      };
+      setupPurchases();
+    }, []);
+
+    useEffect(() => {
         // Verifica se há retorno do Mercado Pago na URL (Web)
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
@@ -2354,7 +2371,7 @@ const App = () => {
                 setUser({ id: currentUser.id, email: currentUser.email });
                 setProfile(userProfile);
 
-                // Initialize RevenueCat
+                // Initialize RevenueCat with UID
                 if (Capacitor.isNativePlatform()) {
                     await Purchases.configure({ 
                         apiKey: import.meta.env.VITE_REVENUECAT_ANDROID_KEY,
