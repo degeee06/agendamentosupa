@@ -6,8 +6,6 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Purchases } from '@revenuecat/purchases-capacitor';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 
 
 declare let jspdf: any;
@@ -64,6 +62,11 @@ type BusinessProfile = {
 type User = {
     id: string;
     email?: string;
+};
+
+type AssistantMessage = {
+    sender: 'user' | 'ai' | 'system';
+    text: string;
 };
 
 type PaymentData = {
@@ -129,11 +132,14 @@ const CopyIcon = (props: any) => <Icon {...props}><rect x="9" y="9" width="13" h
 const AlertCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></Icon>;
 const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></Icon>;
 const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
-const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
+const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
 const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
 const ChevronLeftIcon = (props: any) => <Icon {...props}><polyline points="15 18 9 12 15 6"></polyline></Icon>;
 const ChevronRightIcon = (props: any) => <Icon {...props}><polyline points="9 18 15 12 9 6"></polyline></Icon>;
 const DownloadIcon = (props: any) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></Icon>;
+const BotIcon = (props: any) => <Icon {...props}><path d="M12 8V4H8" /><rect x="4" y="12" width="16" height="8" rx="2" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="M12 12v-2" /></Icon>;
+const SendIcon = (props: any) => <Icon {...props}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></Icon>;
+const ChatBubbleIcon = (props: any) => <Icon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></Icon>;
 const MenuIcon = (props: any) => <Icon {...props}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></Icon>;
 const RefreshIcon = (props: any) => <Icon {...props}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></Icon>;
 
@@ -292,7 +298,7 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualChe
         <Modal isOpen={isOpen} onClose={() => {}} title="Pagamento Pix" size="md">
             <div className="flex flex-col items-center space-y-6">
                 <p className="text-gray-300 text-center">
-                    Escaneie o QR Code abaixo ou use a option "Copia e Cola" no aplicativo do seu banco para finalizar o agendamento.
+                    Escaneie o QR Code abaixo ou use a opção "Copia e Cola" no aplicativo do seu banco para finalizar o agendamento.
                 </p>
                 
                 <div className="bg-white p-4 rounded-xl">
@@ -784,6 +790,62 @@ const TermsModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void 
                  <button onClick={onClose} className="w-full mt-6 bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors">
                     Entendi
                 </button>
+            </div>
+        </Modal>
+    );
+};
+
+const AssistantModal = ({ isOpen, onClose, messages, onSendMessage, isLoading }: { isOpen: boolean; onClose: () => void; messages: AssistantMessage[]; onSendMessage: (message: string) => void; isLoading: boolean; }) => {
+    const [input, setInput] = useState('');
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(scrollToBottom, [messages, isLoading]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (input.trim() && !isLoading) {
+            onSendMessage(input.trim());
+            setInput('');
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Assistente IA" size="lg">
+            <div className="flex flex-col h-[60vh]">
+                <div className="flex-1 overflow-y-auto space-y-4 p-4 scrollbar-hide">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender === 'user' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-200'}`}>
+                                <p className="text-sm">{msg.text}</p>
+                            </div>
+                        </div>
+                    ))}
+                    {isLoading && (
+                        <div className="flex justify-start">
+                            <div className="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl bg-gray-800 text-gray-200">
+                                <LoaderIcon className="w-5 h-5 text-gray-400" />
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
+                <form onSubmit={handleSubmit} className="mt-4 flex items-center space-x-2">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        placeholder="Ex: Agendar para João às 15h amanhã"
+                        className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        disabled={isLoading}
+                    />
+                    <button type="submit" disabled={isLoading || !input.trim()} className="p-3 bg-gray-600 rounded-lg text-white hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <SendIcon className="w-6 h-6" />
+                    </button>
+                </form>
             </div>
         </Modal>
     );
@@ -1495,6 +1557,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const APPOINTMENTS_PAGE_SIZE = 20;
 
+    const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
+    const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
+        { sender: 'ai', text: 'Olá! Como posso ajudar a organizar sua agenda hoje?' }
+    ]);
+    const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+
 
     const TRIAL_LIMIT = 5;
     const usage = profile?.daily_usage ?? 0;
@@ -1760,6 +1828,56 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
     };
     
+    const handleSendMessageToAssistant = async (message: string) => {
+        const currentMessages = [...assistantMessages, { sender: 'user' as const, text: message }];
+        setAssistantMessages(currentMessages);
+        setIsAssistantLoading(true);
+    
+        try {
+            const context = `
+                - Dias de trabalho: ${JSON.stringify(businessProfile?.working_days)}
+                - Horário de funcionamento: De ${businessProfile?.start_time} a ${businessProfile?.end_time}
+                - Datas bloqueadas: ${JSON.stringify(businessProfile?.blocked_dates)}
+                - Horários recorrentes bloqueados: ${JSON.stringify(businessProfile?.blocked_times)}
+                - Agendamentos existentes (ocupados): ${JSON.stringify(appointments.filter(a => a.status !== 'Cancelado').map(a => ({ date: a.date, time: a.time })))}
+            `;
+
+            const { data, error } = await supabase.functions.invoke('deepseek-assistant', {
+                body: {
+                  messages: currentMessages.map(m => ({
+                    role: m.sender === 'ai' ? 'assistant' : m.sender,
+                    content: m.text
+                  })),
+                  context,
+                  currentDate: new Date().toISOString(),
+                },
+            });
+
+            if (error) throw error;
+            
+            const aiResponse = data.choices[0].message;
+            
+            if (aiResponse.tool_calls && aiResponse.tool_calls.length > 0) {
+                const toolCall = aiResponse.tool_calls[0].function;
+                if (toolCall.name === 'create_appointment') {
+                    const args = JSON.parse(toolCall.arguments);
+                    const { name, date, time, phone = '', email = '' } = args;
+
+                    await handleSaveAppointment(name, phone, email, date, time);
+                    setAssistantMessages(prev => [...prev, { sender: 'ai', text: `Agendamento para ${name} em ${parseDateAsUTC(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às ${time} foi criado com sucesso.` }]);
+                }
+            } else {
+                 setAssistantMessages(prev => [...prev, { sender: 'ai', text: aiResponse.content }]);
+            }
+    
+        } catch (error) {
+            console.error("Erro do assistente de IA:", error);
+            setAssistantMessages(prev => [...prev, { sender: 'ai', text: 'Desculpe, ocorreu um erro ao processar sua solicitação.' }]);
+        } finally {
+            setIsAssistantLoading(false);
+        }
+    };
+
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
         // 1. Salva o estado original para um possível rollback.
@@ -1802,7 +1920,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         }
     };
     
-    const handleDownloadPDF = async () => {
+    const handleDownloadPDF = () => {
         if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
             console.error("jsPDF library not loaded.");
             alert("Não foi possível gerar o PDF. Por favor, recarregue a página e tente novamente.");
@@ -1812,7 +1930,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         const { jsPDF } = jspdf;
         const doc = new jsPDF();
     
-        doc.text("Relatório de Agendamentos - Oubook", 14, 16);
+        doc.text("Relatório de Agendamentos", 14, 16);
     
         const tableColumn = ["Cliente", "Data", "Hora", "Status", "Contato"];
         const tableRows: (string | undefined)[][] = [];
@@ -1835,34 +1953,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             theme: 'striped',
             headStyles: { fillColor: [28, 28, 30] },
         });
-
-        const fileName = "agendamentos_oubook.pdf";
     
-        if (Capacitor.isNativePlatform()) {
-            try {
-                const pdfBase64 = doc.output('datauristring').split(',')[1];
-                
-                // Grava arquivo temporário
-                const result = await Filesystem.writeFile({
-                    path: fileName,
-                    data: pdfBase64,
-                    directory: Directory.Cache
-                });
-
-                // Compartilha para download/abertura
-                await Share.share({
-                    title: 'Relatório de Agendamentos',
-                    text: 'Aqui está seu relatório de agendamentos do Oubook.',
-                    url: result.uri,
-                    dialogTitle: 'Salvar Relatório'
-                });
-            } catch (err: any) {
-                console.error("Erro ao gerar/compartilhar PDF no mobile:", err);
-                alert("Erro ao salvar PDF: " + err.message);
-            }
-        } else {
-            doc.save(fileName);
-        }
+        doc.save("agendamentos.pdf");
     };
 
     const handleLogout = async () => {
@@ -2007,6 +2099,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 >
                     <DownloadIcon className="w-5 h-5" />
                 </button>
+                 <button
+                    onClick={() => setIsAssistantModalOpen(true)}
+                    className="glassmorphism p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors"
+                    aria-label="Abrir Assistente IA"
+                    title="Abrir Assistente IA"
+                >
+                    <ChatBubbleIcon className="w-5 h-5" />
+                </button>
                 <div 
                   onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
                   className="inline-block"
@@ -2086,6 +2186,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
         <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
         <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} onUpgrade={handleUpgrade} />
+        <AssistantModal isOpen={isAssistantModalOpen} onClose={() => setIsAssistantModalOpen(false)} messages={assistantMessages} onSendMessage={handleSendMessageToAssistant} isLoading={isAssistantLoading} />
       </div>
     );
 };
