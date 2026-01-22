@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Oubook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -11,19 +12,40 @@
       body {
         background-color: #000;
         color: #F5F5F7;
+        margin: 0;
+        padding: 0;
+        /* Suporte para Safe Areas do Capacitor/Mobile */
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+        overflow: hidden;
       }
+      
+      #root {
+        height: 100dvh;
+        width: 100%;
+      }
+
       .glassmorphism {
-        background: rgba(28, 28, 30, 0.5);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
+        background: rgba(28, 28, 30, 0.7);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
+      
       .scrollbar-hide::-webkit-scrollbar {
         display: none;
       }
       .scrollbar-hide {
         -ms-overflow-style: none;
         scrollbar-width: none;
+      }
+
+      /* Ajuste para modais em telas pequenas */
+      .modal-content-scroll {
+        max-height: calc(85dvh - 120px);
+        overflow-y: auto;
       }
       
       /* 🔥 FORÇAR DESIGN DO SEU BOTÃO SOBRE O HOTMART */
