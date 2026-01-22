@@ -49,7 +49,6 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    // Tenta pegar parametros tanto da URL (Webhook MP padrão) quanto do Body (Chamada manual do Frontend)
     let topic = url.searchParams.get("topic") || url.searchParams.get("type");
     let id = url.searchParams.get("id") || url.searchParams.get("data.id");
     
@@ -59,16 +58,14 @@ serve(async (req) => {
     if (req.body) {
         try {
             const body = await req.json();
-            // Suporta estrutura direta { id: "..." } ou estrutura webhook { data: { id: ... } }
             bodyId = body.id || body.data?.id; 
             bodyAction = body.action || body.type;
         } catch (e) {
-            // Body pode estar vazio em alguns requests GET
+            // Body vazio ou inválido
         }
     }
 
     const paymentId = id || bodyId;
-    // Se não veio action explícita, assumimos que é uma verificação de pagamento se tivermos um ID
     const action = topic || bodyAction || (paymentId ? "payment.updated" : null);
 
     if ((action !== "payment" && action !== "payment.updated") || !paymentId) {
@@ -83,7 +80,7 @@ serve(async (req) => {
     // 1. Busca pagamento local
     const { data: paymentRecord, error: paymentError } = await supabase
         .from("payments")
-        .select("appointment_id, mp_payment_id, appointment:appointments(user_id, name, date, time)") 
+        .select("appointment_id, mp_payment_id, status, appointment:appointments(user_id, name, date, time, status)") 
         .eq("mp_payment_id", paymentId)
         .single();
 
@@ -94,9 +91,10 @@ serve(async (req) => {
         }); 
     }
 
-    // 2. Busca status no MP
+    // 2. Busca status no MP para garantir veracidade
     const professionalId = paymentRecord.appointment.user_id;
     const { data: connection } = await supabase.from("mp_connections").select("access_token").eq("user_id", professionalId).single();
+    
     if (!connection) {
         return new Response(JSON.stringify({ error: "Professional disconnected" }), { 
             status: 200,
@@ -118,17 +116,27 @@ serve(async (req) => {
     const mpData = await mpRes.json();
     const status = mpData.status;
 
-    // 3. Atualiza DB
+    // 3. Atualiza tabela de pagamentos
     await supabase.from("payments").update({ status: status, updated_at: new Date().toISOString() }).eq("mp_payment_id", paymentId);
 
-    // 4. Atualiza Agendamento
+    // 4. ATUALIZAÇÃO ATÔMICA E IDEMPOTENTE DO AGENDAMENTO
+    // Só tentamos mudar para Confirmado se o status atual NÃO for Confirmado.
+    // O .select() nos diz se alguma linha foi REALMENTE alterada neste processo.
     if (status === "approved") {
-        const { error } = await supabase.from("appointments").update({ status: "Confirmado" }).eq("id", paymentRecord.appointment_id);
+        const { data: updatedRows, error: updateError } = await supabase
+            .from("appointments")
+            .update({ status: "Confirmado" })
+            .eq("id", paymentRecord.appointment_id)
+            .neq("status", "Confirmado")
+            .select();
         
-        if (!error) {
-            // Envia Push Notification
+        // Se updatedRows tiver conteúdo, significa que fomos o PRIMEIRO processo a confirmar este agendamento.
+        // Se estiver vazio, outro processo (webhook paralelo ou polling) já confirmou e enviou a notificação.
+        if (!updateError && updatedRows && updatedRows.length > 0) {
             const appt = paymentRecord.appointment;
             const formattedDate = new Date(appt.date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            
+            // Dispara notificação ÚNICA
             await sendPushNotification(supabase, professionalId, 'Pagamento Recebido!', `${appt.name} confirmou o agendamento para ${formattedDate} às ${appt.time}.`);
         }
     }
