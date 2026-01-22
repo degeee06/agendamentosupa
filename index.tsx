@@ -741,7 +741,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
                 </p>
                 <button 
                     onClick={onUpgrade}
-                    className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-4 px-6 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-white font-black py-4 px-6 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
                 >
                     🚀 FAZER UPGRADE PREMIUM
                 </button>
@@ -1792,7 +1792,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             return;
         }
 
-        const { data: newAppointment, error = null } = await supabase
+        const { data: newAppointment, error } = await supabase
             .from('appointments')
             .insert({ name, phone, email, date, time, user_id: user.id, status: 'Confirmado' }) // Agendamento manual já nasce confirmado? Ou pendente? Geralmente confirmado se o próprio dono cria.
             .select()
@@ -2023,7 +2023,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             // Verifica se a compra foi aprovada
             if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
               // Atualize o status no seu Supabase aqui
-              const { data: updatedProfile, error: profileError = null } = await supabase
+              const { data: updatedProfile, error: profileError } = await supabase
                 .from('profiles')
                 .update({ plan: 'premium' })
                 .eq('id', user.id)
@@ -2125,7 +2125,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
                         <button
                             onClick={handleUpgrade}
-                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
+                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-white font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
                         >
                             UPGRADE
                         </button>
@@ -2318,7 +2318,7 @@ const App = () => {
         const syncUserAndProfile = async () => {
             setIsLoading(true);
             try {
-                const { data: { session }, error: sessionError = null } = await supabase.auth.getSession();
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 if (sessionError) throw sessionError;
                 if (!session) {
                     // No session, user is logged out.
@@ -2330,16 +2330,16 @@ const App = () => {
         
                 // Step 1: Fetch profile. This is the main validation point.
                 // If this fails (e.g., with a 406 error), the session is considered invalid.
-                let { data: userProfile, error: profileError = null } = await supabase
+                let { data: userProfile, error: profileError } = await supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', currentUser.id)
                     .single();
                 
                 // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
-                if (profileError && (profileError as any).code === 'PGRST116') { 
+                if (profileError && profileError.code === 'PGRST116') { 
                     const { data: { user: authUser } } = await supabase.auth.getUser();
-                    const { data: newProfile, error: insertError = null } = await supabase
+                    const { data: newProfile, error: insertError } = await supabase
                         .from('profiles')
                         .insert({ 
                             id: currentUser.id, 
