@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
@@ -1767,7 +1766,14 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     await supabase.functions.invoke('register-push-token', { body: { token: token.value } });
                 });
             } else if ("serviceWorker" in navigator && "PushManager" in window) {
-                // NOVA LÓGICA: Suporte nativo para notificações no Navegador (WEB)
+                // SOLICITAR PERMISSÃO EXPLÍCITA NO NAVEGADOR
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    console.log('Permissão de notificação negada pelo usuário.');
+                    return;
+                }
+
+                // Suporte nativo para notificações no Navegador (WEB)
                 const registration = await navigator.serviceWorker.register('/sw.js');
                 let subscription = await registration.pushManager.getSubscription();
                 
