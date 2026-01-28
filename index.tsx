@@ -2156,30 +2156,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                             <SettingsIcon className="w-5 h-5"/><span>Configurações</span>
                         </button>
                     </li>
-                    {/* Botão de Ativar Notificações */}
-                    {permissionStatus === 'default' && (
-                        <li>
-                            <button 
-                                onClick={() => registerForPushNotifications(user.id, true)} 
-                                className="w-full flex items-center space-x-3 text-yellow-300 hover:bg-gray-700/50 p-3 rounded-lg transition-colors border border-yellow-500/30 bg-yellow-500/10"
-                            >
-                                <BellIcon className="w-5 h-5"/><span>Ativar Notificações</span>
-                            </button>
-                        </li>
-                    )}
-                    {/* Botão de Testar Notificação */}
-                    {(permissionStatus === 'granted') && (
-                        <li>
-                            <button 
-                                onClick={handleTestNotification} 
-                                disabled={isTestingNotification}
-                                className="w-full flex items-center space-x-3 text-blue-300 hover:bg-gray-700/50 p-3 rounded-lg transition-colors border border-blue-500/30 bg-blue-500/10 disabled:opacity-50"
-                            >
-                                {isTestingNotification ? <LoaderIcon className="w-5 h-5"/> : <BellIcon className="w-5 h-5"/>}
-                                <span>Testar Notificação</span>
-                            </button>
-                        </li>
-                    )}
                 </ul>
             </nav>
              <div className="border-t border-gray-700/50 pt-4">
@@ -2322,243 +2298,80 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     );
 };
 
-
 const App = () => {
-    const [user, setUser] = useState<User | null>(null);
+    const [session, setSession] = useState<any>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [path, setPath] = useState(window.location.pathname);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Verifica se há retorno do Mercado Pago na URL (Web)
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        const state = params.get('state'); // UserId
-
-        if (code && state) {
-            const connectMercadoPago = async () => {
-                setIsLoading(true);
-                try {
-                    const { data, error = null } = await supabase.functions.invoke('mercadopago-connect', {
-                        body: { code, state }
-                    });
-
-                    if (error) throw error;
-                    
-                    if (data?.success) {
-                        alert('Conta do Mercado Pago conectada com sucesso!');
-                        // Remove os parâmetros da URL para limpar
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                        // Recarrega a página para atualizar o estado do perfil
-                        window.location.reload();
-                    } else {
-                         throw new Error(data?.error || 'Erro desconhecido');
-                    }
-                } catch (err: any) {
-                    console.error('Erro ao processar callback do Mercado Pago:', err);
-                    alert(`Erro ao conectar: ${err.message}`);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            connectMercadoPago();
-        }
-    }, []);
-    
-    useEffect(() => {
-        // Handle native OAuth callback
-        CapacitorApp.addListener('appUrlOpen', async (event) => {
-            const url = new URL(event.url);
-            
-            // Check if it's the correct callback URL
-            if (`${url.protocol}//${url.hostname}` !== 'com.oubook.app://auth-callback') {
-                return;
-            }
-
-            const hash = url.hash.substring(1); // Remove '#'
-            const params = new URLSearchParams(hash);
-
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-
-            if (accessToken && refreshToken) {
-                const { error = null } = await (supabase.auth as any).setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken,
-                });
-
-                if (error) {
-                    console.error('Erro ao definir a sessão do Supabase:', error);
-                }
-                
-                // Always close the browser after attempting to set session
-                await Browser.close();
-                // onAuthStateChange will handle the UI update
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            if (session) {
+                fetchProfile(session.user.id);
             } else {
-                 await Browser.close();
+                setLoading(false);
             }
         });
-        
-        Browser.addListener('browserFinished', () => {
-            console.log('Browser fechado pelo usuário.');
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+            if (session) {
+                // Optimize: only fetch if needed
+                if (!profile || profile.id !== session.user.id) {
+                    fetchProfile(session.user.id);
+                }
+            } else {
+                setProfile(null);
+                setLoading(false);
+            }
         });
+
+        return () => subscription.unsubscribe();
     }, []);
 
-    useEffect(() => {
-        const syncUserAndProfile = async () => {
-            setIsLoading(true);
-            try {
-                // Modified to handle version mismatch: in v1 getSession().then isn't a promise, in v2 it is.
-                // Using (supabase.auth as any) to bypass type check and assuming session() or getSession()
-                // logic needs to be robust. However, provided errors say getSession doesn't exist on SupabaseAuthClient (v1 type).
-                // So if we are in v1 environment types, we should use v1 logic: const session = supabase.auth.session()
-                
-                let session: any = null;
-                const authAny = supabase.auth as any;
-                
-                if (typeof authAny.getSession === 'function') {
-                     // v2
-                     const { data } = await authAny.getSession();
-                     session = data.session;
-                } else if (typeof authAny.session === 'function') {
-                     // v1
-                     session = authAny.session();
-                }
-
-                if (!session) {
-                    // No session, user is logged out.
-                    setUser(null);
-                    setProfile(null);
-                    return;
-                }
-                const currentUser = session.user;
-        
-                // Step 1: Fetch profile. This is the main validation point.
-                // If this fails (e.g., with a 406 error), the session is considered invalid.
-                let { data: userProfile, error: profileError = null } = await supabase
+    const fetchProfile = async (userId: string) => {
+        try {
+            const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+            if (data) {
+                setProfile(data);
+            } else {
+                const { data: newProfile } = await supabase
                     .from('profiles')
-                    .select('*')
-                    .eq('id', currentUser.id)
+                    .insert({ 
+                        id: userId, 
+                        plan: 'trial', 
+                        daily_usage: 0, 
+                        last_usage_date: new Date().toISOString().split('T')[0] 
+                    })
+                    .select()
                     .single();
-                
-                // Step 2: Handle new user creation (PGRST116 is Supabase code for "exact one row not found")
-                if (profileError && (profileError as any).code === 'PGRST116') { 
-                    const { data: { user: authUser } } = await (supabase.auth as any).getUser();
-                    const { data: newProfile, error: insertError = null } = await supabase
-                        .from('profiles')
-                        .insert({ 
-                            id: currentUser.id, 
-                            terms_accepted_at: new Date().toISOString() 
-                        })
-                        .select()
-                        .single();
-        
-                    if (insertError) throw insertError; // Throw to main catch block
-                    userProfile = newProfile;
-                } else if (profileError) {
-                    throw profileError; // Throw any other profile fetch error to the catch block
-                }
-        
-                if (!userProfile) { // Safeguard
-                    throw new Error("User profile not found or could not be created.");
-                }
-        
-                // Step 3: Check for premium expiration
-                const isPremium = userProfile.plan === 'premium';
-                const premiumExpired = isPremium && userProfile.premium_expires_at && new Date(userProfile.premium_expires_at) < new Date();
-        
-                if (premiumExpired) {
-                    const { data: revertedProfile = null } = await supabase
-                        .from('profiles')
-                        .update({ plan: 'trial', premium_expires_at: null })
-                        .eq('id', currentUser.id)
-                        .select()
-                        .single();
-                    if (revertedProfile) userProfile = revertedProfile;
-                }
-        
-                // Step 4: Check for daily usage reset for trial users
-                const today = new Date().toISOString().split('T')[0];
-                if (userProfile.plan === 'trial' && userProfile.last_usage_date !== today) {
-                    const { data: updatedProfile = null } = await supabase
-                        .from('profiles')
-                        .update({ daily_usage: 0, last_usage_date: today })
-                        .eq('id', currentUser.id)
-                        .select()
-                        .single();
-                    if (updatedProfile) userProfile = updatedProfile;
-                }
-                
-                // Step 5: If all checks pass, set the user and profile state to logged-in
-                setUser({ id: currentUser.id, email: currentUser.email });
-                setProfile(userProfile);
-
-                // Initialize RevenueCat with UID
-                if (Capacitor.isNativePlatform()) {
-                    await Purchases.configure({ 
-                        apiKey: import.meta.env.VITE_REVENUECAT_ANDROID_KEY || 'goog_tXGzFUmdhKasrUrygDIgLxOVTPs',
-                        appUserID: currentUser.id 
-                    });
-                    console.log("RevenueCat pronto para usuário:", currentUser.id);
-                }
-
-            } catch (error) {
-                // If any step fails, the session is invalid. Clear user state to force logout.
-                console.error("Failed to sync user profile; session is likely invalid.", error);
-                setUser(null);
-                setProfile(null);
-            } finally {
-                setIsLoading(false);
+                if (newProfile) setProfile(newProfile);
             }
-        };
-      
-        // Initial check when the component mounts.
-        syncUserAndProfile();
-
-        const { data: authListener } = (supabase.auth as any).onAuthStateChange((event: string) => {
-            // Re-sync profile on sign-in event.
-            if (event === 'SIGNED_IN') {
-                syncUserAndProfile();
-                if (localStorage.getItem('termsAccepted') !== 'true') {
-                    localStorage.setItem('termsAccepted', 'true');
-                }
-            }
-            // Clear state on sign-out event.
-            if (event === 'SIGNED_OUT') {
-                setUser(null);
-                setProfile(null);
-            }
-        });
-      
-        return () => {
-            authListener?.subscription?.unsubscribe();
-        };
-    }, []);
-
-    const router = useMemo(() => {
-        const pathParts = path.split('/').filter(Boolean);
-        if (pathParts[0] === 'book-link' && pathParts[1]) {
-            return <PaginaDeAgendamento tokenId={pathParts[1]} />;
+        } catch (e) {
+            console.error("Profile fetch error", e);
+        } finally {
+            setLoading(false);
         }
-        if (user && profile) {
-            return <Dashboard user={user} profile={profile} setProfile={setProfile} />;
-        }
-        if(!user && !isLoading) {
-             return <LoginPage />;
-        }
-        return null; // Return null or a loader while loading
-    }, [path, user, profile, isLoading]);
+    };
 
-    if (isLoading) {
-        return (
-             <div className="min-h-screen bg-black flex justify-center items-center">
-                 <LoaderIcon className="w-16 h-16 text-white"/>
-             </div>
-        );
+    const path = window.location.pathname;
+    const bookLinkMatch = path.match(/\/book-link\/([^\/]+)/);
+
+    if (bookLinkMatch) {
+        return <PaginaDeAgendamento tokenId={bookLinkMatch[1]} />;
     }
-    
-    return router;
+
+    if (loading) {
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+    }
+
+    if (!session) {
+        return <LoginPage />;
+    }
+
+    return <Dashboard user={session.user} profile={profile} setProfile={setProfile} />;
 };
 
 const container = document.getElementById('root');
