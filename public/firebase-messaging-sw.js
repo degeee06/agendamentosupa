@@ -15,12 +15,18 @@ const messaging = firebase.messaging();
 
 // Listener para mensagens em segundo plano
 messaging.onBackgroundMessage((payload) => {
-  console.log('[sw.js] Mensagem recebida em segundo plano ', payload);
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/favicon.ico'
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano ', payload);
+  
+  if (payload.notification) {
+      const notificationTitle = payload.notification.title;
+      const notificationOptions = {
+        body: payload.notification.body,
+        icon: '/icon.svg',
+        badge: '/icon.svg', // Pequeno ícone na barra de status (Android)
+        tag: 'oubook-notification', // Evita spam de notificações duplicadas
+        renotify: true
+      };
+    
+      self.registration.showNotification(notificationTitle, notificationOptions);
+  }
 });

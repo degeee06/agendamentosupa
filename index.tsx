@@ -1770,9 +1770,21 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 setPermissionStatus(permission);
 
                 if (permission === 'granted') {
-                    // Obtem o token usando a chave VAPID
+                    // --- CORREÇÃO CRÍTICA AQUI ---
+                    // Registra explicitamente o Service Worker antes de pedir o token
+                    let registration;
+                    try {
+                        registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                        console.log('Service Worker registrado com sucesso:', registration);
+                    } catch (swError) {
+                        console.error('Falha ao registrar Service Worker:', swError);
+                        // Tenta continuar mesmo se falhar (alguns browsers já podem ter registrado)
+                    }
+
+                    // Passa a registration explicitamente para o getToken
                     const token = await getToken(messaging, { 
-                        vapidKey: FIREBASE_VAPID_KEY 
+                        vapidKey: FIREBASE_VAPID_KEY,
+                        serviceWorkerRegistration: registration 
                     });
 
                     if (token) {
@@ -1783,18 +1795,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
                         onMessage(messaging, (payload) => {
                             console.log('Mensagem recebida em foreground (Web):', payload);
-                            // Tenta criar notificação visual do sistema mesmo com app aberto
                             if (payload.notification) {
                                 const { title, body } = payload.notification;
+                                // Tenta criar notificação visual do sistema
                                 if (Notification.permission === 'granted') {
                                     try {
-                                        // Tenta lançar notificação nativa do browser
                                         new Notification(title || "Nova Mensagem", {
                                             body: body,
-                                            icon: '/icon.svg', // Usa o ícone do app
+                                            icon: '/icon.svg',
                                         });
                                     } catch (e) {
-                                        // Fallback para alert se o browser bloquear
                                         alert(`${title}\n${body}`);
                                     }
                                 } else {
