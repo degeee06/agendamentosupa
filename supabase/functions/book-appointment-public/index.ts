@@ -16,81 +16,108 @@ const DenoEnv = (Deno as any).env;
 
 // Função auxiliar para obter um token de acesso OAuth2 a partir da chave da conta de serviço.
 async function getAccessToken() {
-  const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
-  if (!serviceAccountJSON) {
-    throw new Error('O segredo FCM_SERVICE_ACCOUNT_KEY não está configurado no Supabase.');
+  try {
+    const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
+    if (!serviceAccountJSON) {
+      throw new Error('Secret FCM_SERVICE_ACCOUNT_KEY ausente.');
+    }
+
+    let serviceAccount;
+    try {
+        serviceAccount = JSON.parse(serviceAccountJSON);
+    } catch (e) {
+        throw new Error('Falha ao fazer parse do JSON do FCM_SERVICE_ACCOUNT_KEY. Verifique se o conteúdo é um JSON válido.');
+    }
+
+    if (!serviceAccount.private_key || !serviceAccount.client_email) {
+        throw new Error('JSON da conta de serviço incompleto (falta private_key ou client_email).');
+    }
+
+    // Formata a chave privada para importação de forma robusta.
+    // Remove cabeçalhos, rodapés e quaisquer caracteres de espaço em branco (incluindo \n reais ou literais).
+    const privateKeyPEM = serviceAccount.private_key
+      .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+      .replace(/-----END PRIVATE KEY-----/g, '')
+      .replace(/\\n/g, '') // Remove literais \n
+      .replace(/\s+/g, ''); // Remove quebras de linha reais e espaços
+
+    const privateKeyData = atob(privateKeyPEM);
+    const privateKeyBuffer = new Uint8Array(privateKeyData.length);
+    for (let i = 0; i < privateKeyData.length; i++) {
+      privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
+    }
+
+    const key = await crypto.subtle.importKey(
+      "pkcs8",
+      privateKeyBuffer,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      true,
+      ["sign"]
+    );
+
+    // Cria o JWT para solicitar o token de acesso.
+    const jwt = await create({ alg: "RS256", typ: "JWT" }, {
+      iss: serviceAccount.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      exp: getNumericDate(3600), // Expira em 1 hora
+      iat: getNumericDate(0),
+    }, key);
+
+    // Solicita o token de acesso ao Google.
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok) {
+      throw new Error(`Google Auth Falhou: ${JSON.stringify(tokenData)}`);
+    }
+
+    return { accessToken: tokenData.access_token, projectId: serviceAccount.project_id };
+  } catch (err) {
+    console.error("Erro CRÍTICO em getAccessToken:", err);
+    throw err;
   }
-
-  const serviceAccount = JSON.parse(serviceAccountJSON);
-
-  // Formata a chave privada para importação.
-  const privateKeyData = atob(
-    serviceAccount.private_key
-      .replace('-----BEGIN PRIVATE KEY-----', '')
-      .replace('-----END PRIVATE KEY-----', '')
-      .replace(/\\n/g, '') // FIX: Correctly remove escaped newlines from the environment secret.
-  );
-  const privateKeyBuffer = new Uint8Array(privateKeyData.length);
-  for (let i = 0; i < privateKeyData.length; i++) {
-    privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
-  }
-
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    privateKeyBuffer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    true,
-    ["sign"]
-  );
-
-  // Cria o JWT para solicitar o token de acesso.
-  const jwt = await create({ alg: "RS256", typ: "JWT" }, {
-    iss: serviceAccount.client_email,
-    scope: "https://www.googleapis.com/auth/firebase.messaging",
-    aud: "https://oauth2.googleapis.com/token",
-    exp: getNumericDate(3600), // Expira em 1 hora
-    iat: getNumericDate(0),
-  }, key);
-
-  // Solicita o token de acesso ao Google.
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt,
-    }),
-  });
-
-  const tokenData = await tokenResponse.json();
-  if (!tokenResponse.ok) {
-    throw new Error(`Erro ao obter token de acesso: ${JSON.stringify(tokenData)}`);
-  }
-
-  return tokenData.access_token;
 }
 
 
 // Função para enviar notificações push usando a API v1 do FCM.
 const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
+  console.log(`Iniciando envio de notificação para UserID: ${userId}`);
+  
   try {
+    // 1. Busca Tokens
     const { data: tokensData, error: tokensError } = await supabaseAdmin
       .from('notification_tokens')
       .select('token')
       .eq('user_id', userId);
 
-    if (tokensError) throw tokensError;
+    if (tokensError) {
+        console.error('Erro ao buscar tokens no Supabase:', tokensError);
+        return { success: false, error: 'Database error fetching tokens' };
+    }
+    
     if (!tokensData || tokensData.length === 0) {
-      console.log(`Nenhum token de notificação encontrado para o usuário: ${userId}`);
-      return;
+      console.log(`Nenhum token de notificação encontrado na tabela 'notification_tokens' para o usuário: ${userId}`);
+      return { success: false, error: 'No tokens found for user' };
     }
 
-    const accessToken = await getAccessToken();
-    const serviceAccount = JSON.parse(DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY'));
-    const projectId = serviceAccount.project_id;
+    console.log(`Encontrados ${tokensData.length} tokens para o usuário.`);
+
+    // 2. Obtém Acesso ao FCM
+    const { accessToken, projectId } = await getAccessToken();
+    console.log(`Access Token gerado com sucesso. Project ID: ${projectId}`);
+
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
-    const sendPromises = tokensData.map((t: { token: string }) => {
+    // 3. Envia para cada token
+    const sendPromises = tokensData.map(async (t: { token: string }) => {
       const message = {
         message: {
           token: t.token,
@@ -101,28 +128,41 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
         },
       };
 
-      return fetch(fcmEndpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
-      });
+      try {
+          const res = await fetch(fcmEndpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(message),
+          });
+          
+          if (!res.ok) {
+              const text = await res.text();
+              console.error(`FCM Rejeitou token ${t.token.substring(0, 10)}...:`, res.status, text);
+              // Opcional: Remover token inválido do banco se o erro for UNREGISTERED
+              return { success: false, error: text };
+          } else {
+              const json = await res.json();
+              console.log(`Sucesso FCM para token ${t.token.substring(0, 10)}...:`, json);
+              return { success: true };
+          }
+      } catch (fetchErr) {
+          console.error(`Erro de rede ao contatar FCM para token ${t.token}:`, fetchErr);
+          return { success: false, error: fetchErr.message };
+      }
     });
 
-    const responses = await Promise.all(sendPromises);
+    const results = await Promise.all(sendPromises);
+    const successes = results.filter(r => r.success).length;
+    console.log(`Envio concluído. Sucessos: ${successes}/${results.length}`);
     
-    responses.forEach(async (response, index) => {
-        if (!response.ok) {
-            console.error(`Erro ao enviar notificação para o token ${tokensData[index].token}: ${response.statusText}`, await response.text());
-        }
-    });
-
-    console.log(`Tentativa de envio de ${responses.length} notificações concluída.`);
+    return { success: successes > 0, results };
 
   } catch (error) {
-    console.error('Erro inesperado na função sendPushNotification:', error.message);
+    console.error('Erro fatal em sendPushNotification:', error);
+    return { success: false, error: error.message };
   }
 };
 
@@ -134,18 +174,47 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { tokenId, name, phone, email, date, time } = await req.json();
-
-    if (!tokenId || !name || !phone || !date || !time) {
-      throw new Error('Detalhes de agendamento obrigatórios ausentes.');
-    }
+    const reqBody = await req.json();
     
-    // Usa o cliente admin para contornar as políticas de RLS.
+    // Usa o cliente admin para contornar as políticas de RLS e para enviar notificações.
     const supabaseAdmin = createClient(
       DenoEnv.get('SUPABASE_URL') ?? '',
       DenoEnv.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // --- MODO DE TESTE ---
+    // Permite disparar uma notificação de teste diretamente para verificar a configuração
+    if (reqBody.action === 'test-notification') {
+        const { userId } = reqBody;
+        if (!userId) throw new Error('UserId é obrigatório para teste.');
+        
+        const result = await sendPushNotification(
+            supabaseAdmin, 
+            userId, 
+            'Teste de Notificação', 
+            'Se você está lendo isso, seu sistema de notificações está configurado corretamente! 🚀'
+        );
+        
+        if (!result.success) {
+             return new Response(JSON.stringify({ error: 'Falha no envio do teste.', details: result }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 500,
+            });
+        }
+
+        return new Response(JSON.stringify({ success: true, details: result }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+        });
+    }
+
+    // --- FLUXO NORMAL DE AGENDAMENTO ---
+    const { tokenId, name, phone, email, date, time } = reqBody;
+
+    if (!tokenId || !name || !phone || !date || !time) {
+      throw new Error('Detalhes de agendamento obrigatórios ausentes.');
+    }
+    
     // 1. Valida o link de uso único.
     const { data: linkData, error: linkError } = await supabaseAdmin
       .from('one_time_links')
@@ -192,8 +261,6 @@ serve(async (req: Request) => {
     }
 
     // 3. Determina o status inicial
-    // Se preço > 0 E tem conta conectada -> Aguardando Pagamento
-    // Se preço == 0 OU não tem conta -> Confirmado
     const servicePrice = businessProfile?.service_price || 0;
     const hasMpConnection = !!mpConnection?.access_token;
     
@@ -217,18 +284,14 @@ serve(async (req: Request) => {
     if (adminProfile.plan === 'trial') {
       const today = new Date().toISOString().split('T')[0];
       const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
-      const { error: updateProfileError } = await supabaseAdmin
+      await supabaseAdmin
         .from('profiles')
         .update({ daily_usage: newUsage, last_usage_date: today })
         .eq('id', adminId);
-      
-      if (updateProfileError) {
-        console.error(`CRÍTICO: Falha ao atualizar o uso para ${adminId} após o agendamento.`, updateProfileError);
-      }
     }
     
     // 6. Marca o link como utilizado E vincula o appointment_id.
-    const { error: updateLinkError } = await supabaseAdmin
+    await supabaseAdmin
       .from('one_time_links')
       .update({ 
         is_used: true,
@@ -236,10 +299,6 @@ serve(async (req: Request) => {
       })
       .eq('id', tokenId);
     
-    if (updateLinkError) {
-      console.error(`CRÍTICO: Falha ao marcar o link ${tokenId} como usado após o agendamento.`, updateLinkError);
-    }
-
     // 7. Envia uma notificação de broadcast para o dashboard do usuário.
     const channel = supabaseAdmin.channel(`dashboard-${adminId}`);
     await channel.send({
@@ -248,10 +307,8 @@ serve(async (req: Request) => {
       payload: newAppointment,
     });
     
-    // Notificação Push:
-    // Se já confirmou (grátis), avisa que confirmou. Se pendente, avisa que é pendente.
+    // 8. Tenta enviar Push Notification
     const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    
     let pushTitle = 'Novo Agendamento';
     let pushBody = `${name} agendou para ${formattedDate} às ${time}.`;
 
@@ -263,19 +320,25 @@ serve(async (req: Request) => {
         pushBody = `${name} agendou para ${formattedDate} às ${time}.`;
     }
 
-    await sendPushNotification(
+    // Não aguardamos falha crítica aqui, apenas logamos
+    const pushResult = await sendPushNotification(
       supabaseAdmin,
       adminId,
       pushTitle,
       pushBody
     );
+    
+    if (!pushResult.success) {
+        console.warn("Aviso: Notificação Push falhou, mas agendamento foi criado.", pushResult.error);
+    }
 
-    return new Response(JSON.stringify({ success: true, appointment: newAppointment }), {
+    return new Response(JSON.stringify({ success: true, appointment: newAppointment, pushDebug: pushResult }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
 
   } catch (error) {
+    console.error("Erro Geral na Edge Function:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
