@@ -19,7 +19,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 
 // IMPORTANTE: Substitua pela sua chave pública VAPID gerada para Web Push
-const VAPID_PUBLIC_KEY = "SUA_CHAVE_VAPID_PUBLICA_AQUI";
+const VAPID_PUBLIC_KEY = "BI2l5wBfz0sVGT5sA0dRHzAWq2klYlZnQRE2xr5K5c3AdS4ubwkmdmCtmEarHPSxy-FrcYCsxxv1kWjqCZTiBk8";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
   const missingVars = [
