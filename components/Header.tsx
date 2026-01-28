@@ -1,7 +1,5 @@
-
 import React from 'react';
-// Fix: Use AuthSession instead of Session as it is the correctly exported type in modern Supabase SDKs
-import type { AuthSession as Session } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { Profile } from '../types';
 
 interface HeaderProps {

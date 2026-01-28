@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
@@ -16,8 +15,7 @@ const AuthView: React.FC = () => {
         const email = `employee_${employeeId}@arranchou.app`;
 
         try {
-            // Fix: Cast supabase.auth to any to bypass type errors for signInWithPassword.
-            const { error } = await (supabase.auth as any).signInWithPassword({
+            const { error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             });

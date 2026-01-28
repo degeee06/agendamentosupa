@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// FIX: Using AuthSession instead of Session as it is the correctly exported type in modern Supabase SDKs
-import type { AuthSession as Session } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { Profile, AttendanceRecord, Attendance, DayKey } from './types';
 import AuthView from './components/AuthView';
@@ -60,8 +58,7 @@ const fetchData = useCallback(async (currentSession: Session) => {
     if (!userProfileData) {
       console.error(`Inconsistent state: User ${currentSession.user.id} authenticated but profile is missing.`);
       alert("Erro: Seu perfil não foi encontrado. Por favor, tente se cadastrar novamente ou contate o suporte. Você será desconectado.");
-      // FIX: Cast to any to bypass type errors for signOut.
-      await (supabase.auth as any).signOut();
+      await supabase.auth.signOut();
       setLoading(false);
       return;
     }
@@ -134,8 +131,7 @@ const fetchData = useCallback(async (currentSession: Session) => {
 
   // Auth listener
   useEffect(() => {
-    // FIX: Cast to any to bypass type errors for getSession on SupabaseAuthClient.
-    (supabase.auth as any).getSession().then(({ data: { session } }: any) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
         fetchData(session);
@@ -144,8 +140,7 @@ const fetchData = useCallback(async (currentSession: Session) => {
       }
     });
 
-    // FIX: Cast to any to bypass type errors for onAuthStateChange on SupabaseAuthClient.
-    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
         fetchData(session);
@@ -235,8 +230,7 @@ const fetchData = useCallback(async (currentSession: Session) => {
 
 
   const handleLogout = async () => {
-    // FIX: Cast to any to bypass type errors for signOut on SupabaseAuthClient.
-    const { error } = await (supabase.auth as any).signOut();
+    const { error } = await supabase.auth.signOut();
     if (error) {
       console.error("Error signing out:", error);
       if (error.name === 'AuthSessionMissingError') {
