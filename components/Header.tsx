@@ -1,9 +1,9 @@
+
 import React from 'react';
-import { Session } from '@supabase/supabase-js';
 import { Profile } from '../types';
 
 interface HeaderProps {
-    session: Session | null;
+    session: any | null;
     profile: Profile | null;
     onLogout: () => void;
 }

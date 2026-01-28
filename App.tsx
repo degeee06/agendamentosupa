@@ -1,5 +1,5 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { Profile, AttendanceRecord, Attendance, DayKey } from './types';
 import AuthView from './components/AuthView';
@@ -31,7 +31,7 @@ function getPastWeeksIds(numWeeks: number): string[] {
 
 
 function App() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -39,7 +39,7 @@ function App() {
   const [currentWeekId] = useState<string>(getWeekId(new Date()));
   const [view, setView] = useState<'current' | 'history' | 'manage_users'>('current');
 
-const fetchData = useCallback(async (currentSession: Session) => {
+const fetchData = useCallback(async (currentSession: any) => {
   try {
     setLoading(true);
     
@@ -58,7 +58,7 @@ const fetchData = useCallback(async (currentSession: Session) => {
     if (!userProfileData) {
       console.error(`Inconsistent state: User ${currentSession.user.id} authenticated but profile is missing.`);
       alert("Erro: Seu perfil não foi encontrado. Por favor, tente se cadastrar novamente ou contate o suporte. Você será desconectado.");
-      await supabase.auth.signOut();
+      await (supabase.auth as any).signOut();
       setLoading(false);
       return;
     }
@@ -131,16 +131,28 @@ const fetchData = useCallback(async (currentSession: Session) => {
 
   // Auth listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        fetchData(session);
-      } else {
-        setLoading(false);
-      }
-    });
+    // Handling v1/v2 compatibility
+    const authAny = supabase.auth as any;
+    
+    const initSession = async () => {
+        let sessionData = null;
+        if (typeof authAny.getSession === 'function') {
+            const { data } = await authAny.getSession();
+            sessionData = data.session;
+        } else if (typeof authAny.session === 'function') {
+            sessionData = authAny.session();
+        }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(sessionData);
+        if (sessionData) {
+            fetchData(sessionData);
+        } else {
+            setLoading(false);
+        }
+    };
+    initSession();
+
+    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
       setSession(session);
       if (session) {
         fetchData(session);
@@ -230,7 +242,7 @@ const fetchData = useCallback(async (currentSession: Session) => {
 
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await (supabase.auth as any).signOut();
     if (error) {
       console.error("Error signing out:", error);
       if (error.name === 'AuthSessionMissingError') {

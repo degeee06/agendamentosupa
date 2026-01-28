@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
@@ -15,7 +16,7 @@ const AuthView: React.FC = () => {
         const email = `employee_${employeeId}@arranchou.app`;
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { error } = await (supabase.auth as any).signInWithPassword({
                 email,
                 password,
             });
@@ -36,7 +37,9 @@ const AuthView: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center p-4">
             <div className="text-center mb-8">
-                <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">Arranchou</h1>
+                <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">
+                    Arranchou
+                </h1>
                 <p className="text-lg text-gray-400 mt-2">Acesse para gerenciar o arranchamento.</p>
             </div>
             <div className="w-full max-w-sm mx-auto bg-gray-800 p-8 rounded-lg shadow-lg">
