@@ -41,7 +41,7 @@ async function getAccessToken() {
   return { accessToken: (await tokenResponse.json()).access_token, projectId: serviceAccount.project_id };
 }
 
-// Envia Push com autocorreção de tokens inválidos
+// Envia Push com autocorreção de tokens inválidos e PRIORIDADE ALTA
 const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
   try {
     const { data: tokensData } = await supabaseAdmin.from('notification_tokens').select('token').eq('user_id', userId);
@@ -52,10 +52,25 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
 
     await Promise.all(tokensData.map(async (t: any) => {
         try {
+            const message = {
+                message: {
+                    token: t.token,
+                    notification: { title, body },
+                    android: {
+                        priority: 'high',
+                        notification: { priority: 'max', default_sound: true }
+                    },
+                    webpush: {
+                        headers: { Urgency: 'high' },
+                        notification: { requireInteraction: true, icon: '/icon.svg' }
+                    }
+                }
+            };
+
             const res = await fetch(fcmEndpoint, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${auth.accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: { token: t.token, notification: { title, body } } })
+                body: JSON.stringify(message)
             });
             
             if (!res.ok) {

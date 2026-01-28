@@ -1,5 +1,5 @@
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.9.0/firebase-messaging-compat.js');
 
 // Dados extraídos do seu JSON
 firebase.initializeApp({
@@ -23,8 +23,9 @@ messaging.onBackgroundMessage((payload) => {
         body: payload.notification.body,
         icon: '/icon.svg',
         badge: '/icon.svg', // Pequeno ícone na barra de status (Android)
-        tag: 'oubook-notification', // Evita spam de notificações duplicadas
-        renotify: true
+        // Tag removida para garantir que toda notificação apareça individualmente durante testes
+        renotify: true,
+        requireInteraction: true // Força a notificação a ficar na tela até o usuário interagir
       };
     
       self.registration.showNotification(notificationTitle, notificationOptions);

@@ -126,10 +126,30 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
     const sendPromises = tokensData.map(async (t: { token: string }) => {
+      // CONFIGURAÇÃO DE PRIORIDADE ALTA
       const message = {
         message: {
           token: t.token,
           notification: { title, body },
+          // Prioridade Android
+          android: {
+            priority: 'high',
+            notification: {
+                priority: 'max',
+                channel_id: 'default',
+                default_sound: true
+            }
+          },
+          // Prioridade WebPush (Padrão RFC 8030)
+          webpush: {
+            headers: {
+              Urgency: 'high'
+            },
+            notification: {
+                requireInteraction: true,
+                icon: '/icon.svg'
+            }
+          }
         },
       };
 
