@@ -104,9 +104,13 @@ const maskPhone = (value: string) => {
     if (!value) return "";
     value = value.replace(/\D/g, '');
     value = value.substring(0, 11);
-    if (value.length > 6) value = value.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
-    else if (value.length > 2) value = value.replace(/^(\d{2})(\d{0,5}).*/, '($1) $2');
-    else if (value.length > 0) value = value.replace(/^(\d*)/, '($1');
+    if (value.length > 6) {
+        value = value.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
+    } else if (value.length > 2) {
+        value = value.replace(/^(\d{2})(\d{0,5}).*/, '($1) $2');
+    } else if (value.length > 0) {
+        value = value.replace(/^(\d*)/, '($1');
+    }
     return value;
 };
 
@@ -208,7 +212,6 @@ const PaymentModal = ({ isOpen, paymentData, onManualCheck }: any) => {
     );
 };
 
-// --- FIX: Added the missing PaginaDeAgendamento component to resolve the error in line 329 ---
 const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
@@ -238,54 +241,24 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             setProfessionalId(appointment.user_id);
 
             if (appointment.status === 'Aguardando Pagamento') {
-                const { data: bizProfile } = await supabase.from('business_profiles')
-                    .select('service_price, user_id')
-                    .eq('user_id', appointment.user_id)
-                    .single();
-
+                const { data: bizProfile } = await supabase.from('business_profiles').select('service_price, user_id').eq('user_id', appointment.user_id).single();
                 if (bizProfile && bizProfile.service_price > 0) {
                     const { data: payData, error: payError } = await supabase.functions.invoke('create-payment', {
-                        body: {
-                            amount: bizProfile.service_price,
-                            description: `Agendamento - ${name}`,
-                            professionalId: bizProfile.user_id,
-                            appointmentId: appointment.id,
-                            payerEmail: email || "cliente@email.com"
-                        }
+                        body: { amount: bizProfile.service_price, description: `Agendamento - ${name}`, professionalId: bizProfile.user_id, appointmentId: appointment.id, payerEmail: email || "cliente@email.com" }
                     });
                     if (payError) throw payError;
                     setPaymentData(payData);
-                } else {
-                    setSuccess(true);
-                }
-            } else {
-                setSuccess(true);
-            }
-        } catch (err: any) {
-            setError(err.message || "Erro ao realizar agendamento.");
-        } finally {
-            setLoading(false);
-        }
+                } else { setSuccess(true); }
+            } else { setSuccess(true); }
+        } catch (err: any) { setError(err.message || "Erro ao realizar agendamento."); } finally { setLoading(false); }
     };
 
     const handleManualCheck = async (paymentId: number) => {
         if (!professionalId) return;
         try {
-            const { data, error: checkError } = await supabase.functions.invoke('create-payment', {
-                body: { action: 'retrieve', paymentId, professionalId: professionalId }
-            });
-            if (checkError) throw checkError;
-            
-            if (data && (data.status === 'approved' || data.status === 'paid' || data.status === 'accredited')) {
-                setSuccess(true);
-                setPaymentData(null);
-            } else {
-                alert("Pagamento ainda não detectado. Tente novamente em alguns instantes.");
-            }
-        } catch (err) {
-            console.error("Erro ao checar pagamento:", err);
-            alert("Erro ao verificar pagamento.");
-        }
+            const { data } = await supabase.functions.invoke('create-payment', { body: { action: 'retrieve', paymentId, professionalId } });
+            if (data && (data.status === 'approved' || data.status === 'paid')) { setSuccess(true); setPaymentData(null); } else { alert("Pagamento ainda não detectado."); }
+        } catch (err) { alert("Erro ao verificar pagamento."); }
     };
 
     if (success) {
@@ -294,7 +267,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                 <div className="glassmorphism p-10 rounded-3xl flex flex-col items-center max-w-sm">
                     <CheckCircleIcon className="w-20 h-20 text-green-400 mb-6" />
                     <h1 className="text-3xl font-bold text-white mb-2">Tudo certo!</h1>
-                    <p className="text-gray-400">Seu agendamento foi confirmado. Aguardamos você!</p>
+                    <p className="text-gray-400">Seu agendamento foi confirmado.</p>
                 </div>
             </div>
         );
@@ -305,27 +278,12 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             <div className="glassmorphism w-full max-w-md p-8 rounded-2xl border border-gray-700">
                 <h1 className="text-2xl font-bold text-white mb-6 text-center">Agendar Horário</h1>
                 <form onSubmit={handleBooking} className="space-y-4">
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-400 font-semibold ml-1">NOME COMPLETO</label>
-                        <input type="text" placeholder="Como podemos te chamar?" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-400 font-semibold ml-1">WHATSAPP</label>
-                        <input type="tel" placeholder="(00) 00000-0000" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-400 font-semibold ml-1">E-MAIL (OPCIONAL)</label>
-                        <input type="email" placeholder="Para receber lembretes" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
-                    </div>
+                    <input type="text" placeholder="Nome Completo" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
+                    <input type="tel" placeholder="WhatsApp" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
+                    <input type="email" placeholder="E-mail (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-xs text-gray-400 font-semibold ml-1">DATA</label>
-                            <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs text-gray-400 font-semibold ml-1">HORA</label>
-                            <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
-                        </div>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
+                        <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/40 border border-gray-700 p-3 rounded-xl text-white outline-none focus:border-white transition-colors" />
                     </div>
                     {error && <p className="text-red-400 text-sm text-center font-medium bg-red-400/10 p-2 rounded-lg">{error}</p>}
                     <button type="submit" disabled={loading} className="w-full bg-white text-black font-bold py-4 rounded-xl flex justify-center items-center gap-2 hover:bg-gray-200 transition-colors disabled:opacity-50 mt-6">
@@ -342,25 +300,23 @@ const Dashboard = ({ user, profile, setProfile }: any) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [usage, setUsage] = useState(profile?.daily_usage || 0);
 
-    const fetchData = useCallback(async () => {
+    useEffect(() => {
+        fetchDashboardData();
+        registerForPushNotifications(user.id);
+    }, [user.id]);
+
+    const fetchDashboardData = useCallback(async () => {
         try {
             const { data } = await supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false });
             setAppointments(data || []);
         } finally { setIsLoading(false); }
     }, [user.id]);
 
-    useEffect(() => {
-        fetchData();
-        registerForPushNotifications(user.id);
-    }, [user.id]);
-
-    // Registro unificado de notificações (Capacitor + Navegador)
+    // Registro unificado de notificações (Capacitor + Navegador Web)
     const registerForPushNotifications = async (userId: string) => {
         try {
             if (Capacitor.isNativePlatform()) {
-                // Lógica nativa existente (Capacitor)
                 let permStatus = await PushNotifications.checkPermissions();
                 if (permStatus.receive === 'prompt') permStatus = await PushNotifications.requestPermissions();
                 if (permStatus.receive === 'granted') {
@@ -370,7 +326,7 @@ const Dashboard = ({ user, profile, setProfile }: any) => {
                     });
                 }
             } else if ("serviceWorker" in navigator && "PushManager" in window) {
-                // Lógica Web Push nativa (Navegador)
+                // Registro de Web Push nativo para o navegador
                 const registration = await navigator.serviceWorker.register('/sw.js');
                 let subscription = await registration.pushManager.getSubscription();
                 
@@ -381,7 +337,7 @@ const Dashboard = ({ user, profile, setProfile }: any) => {
                     });
                 }
                 
-                // Enviamos a inscrição completa como token (a Edge Function vai tratar)
+                // Salva a inscrição (objeto JSON completo) como token
                 await supabase.functions.invoke('register-push-token', { 
                     body: { token: JSON.stringify(subscription) } 
                 });
@@ -416,7 +372,6 @@ const Dashboard = ({ user, profile, setProfile }: any) => {
           <header className="glassmorphism p-6 sticky top-0 z-20 flex justify-between items-center">
              <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden"><MenuIcon /></button>
              <h2 className="text-xl font-bold">Painel</h2>
-             <div className="text-xs text-gray-400">Plano: {profile?.plan || 'trial'} ({usage}/5)</div>
           </header>
           <div className="p-6">
              {isLoading ? <LoaderIcon className="mx-auto w-10 h-10" /> : (
@@ -431,34 +386,26 @@ const Dashboard = ({ user, profile, setProfile }: any) => {
 };
 
 const App = () => {
-    const [user, setUser] = useState<any>(null);
-    const [profile, setProfile] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [path, setPath] = useState(window.location.pathname);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                setUser({ id: session.user.id, email: session.user.email });
-                supabase.from('profiles').select('*').eq('id', session.user.id).single().then(({ data }) => setProfile(data));
-            }
+            if (session) { setUser({ id: session.user.id, email: session.user.email }); }
             setIsLoading(false);
         });
         supabase.auth.onAuthStateChange((_event, session) => {
-            if (session) {
-                setUser({ id: session.user.id, email: session.user.email });
-                supabase.from('profiles').select('*').eq('id', session.user.id).single().then(({ data }) => setProfile(data));
-            } else { setUser(null); setProfile(null); }
+            if (session) { setUser({ id: session.user.id, email: session.user.email }); } else { setUser(null); }
         });
     }, []);
 
     if (isLoading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-16 h-16 text-white"/></div>;
     
-    // Roteamento manual simplificado
     const pathParts = path.split('/').filter(Boolean);
     if (pathParts[0] === 'book-link' && pathParts[1]) return <PaginaDeAgendamento tokenId={pathParts[1]} />;
     
-    return user ? <Dashboard user={user} profile={profile} setProfile={setProfile} /> : (
+    return user ? <Dashboard user={user} /> : (
         <div className="min-h-screen flex flex-col justify-center items-center bg-black">
             <h1 className="text-5xl font-bold mb-10">Oubook</h1>
             <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} className="bg-white text-black font-bold py-3 px-8 rounded-lg">Entrar com Google</button>
