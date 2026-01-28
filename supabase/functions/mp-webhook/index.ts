@@ -4,25 +4,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.4/mod.ts";
 import webpush from "https://esm.sh/web-push";
 
+// FIX: Declare Deno to satisfy TypeScript type checker in non-Deno environments.
 declare const Deno: any;
-
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DenoEnv = (Deno as any).env;
-const VAPID_PUBLIC = DenoEnv.get("VAPID_PUBLIC_KEY");
-const VAPID_PRIVATE = DenoEnv.get("VAPID_PRIVATE_KEY");
-
-if (VAPID_PUBLIC && VAPID_PRIVATE) {
-    webpush.setVapidDetails("mailto:suporte@oubook.com", VAPID_PUBLIC, VAPID_PRIVATE);
-}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function getAccessToken() {
-  const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
+async function getAccessToken(serviceAccountJSON: string | undefined) {
   if (!serviceAccountJSON) return null;
   try {
     const serviceAccount = JSON.parse(serviceAccountJSON);
@@ -37,32 +27,6 @@ async function getAccessToken() {
   } catch (e) { return null; }
 }
 
-const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
-  try {
-    const { data: tokensData } = await supabaseAdmin.from('notification_tokens').select('token').eq('user_id', userId);
-    if (!tokensData || tokensData.length === 0) return;
-    const accessToken = await getAccessToken();
-    const projectId = JSON.parse(DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY') || '{}').project_id;
-    
-    const promises = tokensData.map(async (t: any) => {
-        const tokenStr = t.token.trim();
-        if (tokenStr.startsWith('{')) {
-            try {
-                const sub = JSON.parse(tokenStr);
-                await webpush.sendNotification(sub, JSON.stringify({ title, body, url: "/" }));
-            } catch (err) { console.error("Web Push Error", err); }
-        } else if (accessToken && projectId) {
-            await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: { token: t.token, notification: { title, body } } })
-            });
-        }
-    });
-    await Promise.all(promises);
-  } catch (e) { console.error('Push error', e); }
-};
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -73,7 +37,7 @@ serve(async (req) => {
 
     if (!paymentId) return new Response("Ignored", { status: 200, headers: corsHeaders });
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: paymentRecord } = await supabase.from("payments").select("appointment_id, appointment:appointments(user_id, name, date, time, status)").eq("mp_payment_id", paymentId).single();
 
     if (paymentRecord && paymentRecord.appointment.status !== 'Confirmado') {
@@ -85,9 +49,39 @@ serve(async (req) => {
             if (mpData.status === "approved") {
                 await supabase.from("appointments").update({ status: "Confirmado" }).eq("id", paymentRecord.appointment_id);
                 await supabase.from("payments").update({ status: "approved" }).eq("mp_payment_id", paymentId);
-                const appt = paymentRecord.appointment;
-                const formattedDate = new Date(appt.date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                await sendPushNotification(supabase, appt.user_id, 'Pagamento Recebido!', `${appt.name} confirmou o agendamento para ${formattedDate} às ${appt.time}.`);
+                
+                // Notificação Silenciosa
+                (async () => {
+                   try {
+                     const appt = paymentRecord.appointment;
+                     const fcmKey = Deno.env.get('FCM_SERVICE_ACCOUNT_KEY');
+                     const accessToken = await getAccessToken(fcmKey);
+                     const projectId = fcmKey ? JSON.parse(fcmKey).project_id : null;
+                     const formattedDate = new Date(appt.date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                     const title = 'Pagamento Recebido!';
+                     const body = `${appt.name} confirmou o agendamento para ${formattedDate} às ${appt.time}.`;
+
+                     const { data: tks } = await supabase.from('notification_tokens').select('token').eq('user_id', appt.user_id);
+                     if (!tks) return;
+
+                     for (const t of tks) {
+                        if (t.token.startsWith('{')) {
+                           const VAPID_PUB = Deno.env.get("VAPID_PUBLIC_KEY");
+                           const VAPID_PRI = Deno.env.get("VAPID_PRIVATE_KEY");
+                           if (VAPID_PUB && VAPID_PRI) {
+                             webpush.setVapidDetails("mailto:suporte@oubook.com", VAPID_PUB, VAPID_PRI);
+                             await webpush.sendNotification(JSON.parse(t.token), JSON.stringify({ title, body, url: "/" }));
+                           }
+                        } else if (accessToken && projectId) {
+                           await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+                              method: 'POST',
+                              headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ message: { token: t.token, notification: { title, body } } })
+                           });
+                        }
+                     }
+                   } catch (e) { console.error("Webhook notification error", e); }
+                })();
             }
         }
     }
