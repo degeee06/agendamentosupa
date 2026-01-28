@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
@@ -33,7 +32,8 @@ const firebaseConfig = {
 };
 
 // Chave VAPID para Web Push (Necessária para getToken no navegador)
-const FIREBASE_VAPID_KEY = "BKe7Lzlv5imlTgwnC9zqVHlcVqRdFW2o-DZtfGLN_90V01ILQdZ8obPTRU5CPwABsNxwQYg6-UsntYd2BB7Debg";
+// Prioriza variável de ambiente, fallback para a chave fornecida
+const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BKe7Lzlv5imlTgwnC9zqVHlcVqRdFW2o-DZtfGLN_90V01ILQdZ8obPTRU5CPwABsNxwQYg6-UsntYd2BB7Debg";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
     console.error("Variáveis de ambiente ausentes.");
@@ -146,6 +146,7 @@ const LogOutIcon = (p: any) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2
 const CopyIcon = (p: any) => <Icon {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1-2-2h9a2 2 0 0 1 2 2v1"/></Icon>;
 const AlertCircleIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>;
 const RefreshIcon = (p: any) => <Icon {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></Icon>;
+const BellIcon = (p: any) => <Icon {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Icon>;
 
 
 // --- COMPONENTES DE UI ---
@@ -1578,6 +1579,11 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         { sender: 'ai', text: 'Olá! Como posso ajudar a organizar sua agenda hoje?' }
     ]);
     const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+    
+    // State to track notification permission status for UI button
+    const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>(
+        typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+    );
 
 
     const TRIAL_LIMIT = 5;
@@ -1737,17 +1743,30 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     // Efeito para registrar para notificações push (Híbrido)
     useEffect(() => {
         if (user.id) {
-            registerForPushNotifications(user.id);
+            registerForPushNotifications(user.id, false); // false = not manual (initial check)
         }
     }, [user.id]);
     
-    const registerForPushNotifications = async (userId: string) => {
+    const registerForPushNotifications = async (userId: string, manual: boolean) => {
         const platform = Capacitor.getPlatform();
 
         // 1. WEB PUSH (Navegador)
         if (platform === 'web' && messaging) {
+            // Check permission immediately to update UI state
+            setPermissionStatus(Notification.permission);
+
+            // On Web, if not manual click, we only proceed if already granted.
+            // Browsers block automatic prompt.
+            if (!manual && Notification.permission !== 'granted') {
+                console.log("Web Push: Waiting for user gesture.");
+                return;
+            }
+
             try {
+                // If manual click or already granted, this works.
                 const permission = await Notification.requestPermission();
+                setPermissionStatus(permission);
+
                 if (permission === 'granted') {
                     // Obtem o token usando a chave VAPID
                     const token = await getToken(messaging, { 
@@ -2141,6 +2160,17 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                             <SettingsIcon className="w-5 h-5"/><span>Configurações</span>
                         </button>
                     </li>
+                    {/* Botão de Ativar Notificações */}
+                    {permissionStatus === 'default' && (
+                        <li>
+                            <button 
+                                onClick={() => registerForPushNotifications(user.id, true)} 
+                                className="w-full flex items-center space-x-3 text-yellow-300 hover:bg-gray-700/50 p-3 rounded-lg transition-colors border border-yellow-500/30 bg-yellow-500/10"
+                            >
+                                <BellIcon className="w-5 h-5"/><span>Ativar Notificações</span>
+                            </button>
+                        </li>
+                    )}
                 </ul>
             </nav>
              <div className="border-t border-gray-700/50 pt-4">
