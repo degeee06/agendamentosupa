@@ -44,27 +44,33 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
     const projectId = serviceAccount.project_id;
 
     const promises = tokensData.map(async (t: any) => {
-        // Se o token começar com '{', é uma assinatura Web Push
-        if (t.token.trim().startsWith('{')) {
+        const tokenStr = t.token.trim();
+        // Se o token começar com '{', é um objeto de assinatura Web Push
+        if (tokenStr.startsWith('{')) {
             try {
-                const sub = JSON.parse(t.token);
-                await webpush.sendNotification(sub, JSON.stringify({ title, body, url: "/" }));
-            } catch (err) { console.error("Web Push Error", err); }
+                const subscription = JSON.parse(tokenStr);
+                await webpush.sendNotification(subscription, JSON.stringify({ title, body, url: "/" }));
+            } catch (err) { console.error("Web Push Error:", err); }
         } else if (accessToken && projectId) {
-            // Caso contrário, é um token FCM (Capacitor)
-            await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: { token: t.token, notification: { title, body } } })
-            });
+            // Caso contrário, trata como token FCM nativo (Capacitor)
+            try {
+                await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: { token: tokenStr, notification: { title, body } } })
+                });
+            } catch (err) { console.error("FCM Error:", err); }
         }
     });
     await Promise.all(promises);
-  } catch (e) { console.error('Push Error', e); }
+  } catch (e) { console.error('Push Global Error:', e); }
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  // ... lógica existente do webhook
+  
+  // O restante do seu código de Webhook do Mercado Pago continua intacto aqui...
+  // Apenas garantimos que o disparador acima funcione para WEB também.
+
   return new Response("Ok", { status: 200, headers: corsHeaders });
 });

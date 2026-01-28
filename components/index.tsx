@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
@@ -18,9 +17,6 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 
-// IMPORTANTE: Substitua pela sua chave pública VAPID gerada para Web Push
-const VAPID_PUBLIC_KEY = "SUA_CHAVE_VAPID_PUBLICA_AQUI";
-
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
   const missingVars = [
     !SUPABASE_URL && "VITE_SUPABASE_URL",
@@ -31,18 +27,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Helper para converter a chave VAPID para Uint8Array exigido pelo navegador para Web Push
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
 
 // Tipos
 type Appointment = {
@@ -1747,42 +1731,45 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         };
     }, [user.id, fetchDashboardData]);
     
-    // Efeito para registrar para notificações push
+    // Efeito para registrar para notificações push em plataformas nativas
     useEffect(() => {
-        if (user.id) {
+        if (Capacitor.isNativePlatform() && user.id) {
             registerForPushNotifications(user.id);
         }
     }, [user.id]);
     
     const registerForPushNotifications = async (userId: string) => {
         try {
-            if (Capacitor.isNativePlatform()) {
-                // Lógica nativa existente para o Capacitor
-                let permStatus = await PushNotifications.checkPermissions();
-                if (permStatus.receive === 'prompt') permStatus = await PushNotifications.requestPermissions();
-                if (permStatus.receive !== 'granted') return;
-                
-                await PushNotifications.register();
-                PushNotifications.addListener('registration', async (token) => {
-                    await supabase.functions.invoke('register-push-token', { body: { token: token.value } });
-                });
-            } else if ("serviceWorker" in navigator && "PushManager" in window) {
-                // NOVA LÓGICA: Suporte nativo para notificações no Navegador (WEB)
-                const registration = await navigator.serviceWorker.register('/sw.js');
-                let subscription = await registration.pushManager.getSubscription();
-                
-                if (!subscription) {
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-                    });
-                }
-                
-                // Salva a inscrição completa como token (a Edge Function vai tratar como JSON)
-                await supabase.functions.invoke('register-push-token', { 
-                    body: { token: JSON.stringify(subscription) } 
-                });
+            let permStatus = await PushNotifications.checkPermissions();
+    
+            if (permStatus.receive === 'prompt') {
+                permStatus = await PushNotifications.requestPermissions();
             }
+    
+            if (permStatus.receive !== 'granted') {
+                console.log('Permissão para notificações não concedida.');
+                return;
+            }
+    
+            await PushNotifications.register();
+    
+            PushNotifications.addListener('registration', async (token) => {
+                console.log('Push registration success, token:', token.value);
+                // Utiliza a Edge Function para registrar o token,
+                // garantindo que o token do dispositivo seja associado ao usuário logado no momento.
+                const { error = null } = await supabase.functions.invoke('register-push-token', {
+                    body: { token: token.value }
+                });
+
+                if (error) {
+                    console.error('Erro ao registrar token de notificação via edge function:', error);
+                }
+            });
+    
+            PushNotifications.addListener('registrationError', (error) => {
+                console.error('Erro no registro de push:', error);
+            });
+    
         } catch (error) {
             console.error("Erro ao configurar notificações push:", error);
         }

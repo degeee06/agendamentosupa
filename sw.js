@@ -17,6 +17,14 @@ self.addEventListener('push', function(event) {
       );
     } catch (e) {
       console.error("Erro ao processar dados do push:", e);
+      // Fallback para texto simples se o JSON falhar
+      const text = event.data.text();
+      event.waitUntil(
+        self.registration.showNotification("Oubook", {
+          body: text,
+          icon: "/icon.svg"
+        })
+      );
     }
   }
 });
