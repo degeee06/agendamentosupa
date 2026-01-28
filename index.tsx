@@ -232,7 +232,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
             onClick={onClose}
         >
             <div 
-                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
+                className={`glassmorphism w-full ${sizeClasses[size]} mx-4 sm:mx-auto rounded-2xl p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
                 onClick={(e) => e.stopPropagation()}
             >
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
@@ -329,7 +329,7 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualChe
                             type="text" 
                             value={paymentData.qr_code || ''} 
                             readOnly 
-                            className="bg-transparent text-white w-full outline-none text-sm truncate" 
+                            className="bg-transparent text-white w-full outline-none text-base truncate" 
                         />
                         <button onClick={handleCopy} className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 transition-colors flex-shrink-0">
                             {copied ? 'Copiado!' : 'Copiar'}
@@ -421,7 +421,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
                 {generatedLink ? (
                     <div className="flex items-center space-x-2 bg-black/30 p-3 rounded-lg border border-gray-600">
                         <LinkIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                        <input type="text" value={generatedLink} readOnly className="bg-transparent text-white w-full outline-none text-sm" />
+                        <input type="text" value={generatedLink} readOnly className="bg-transparent text-white w-full outline-none text-base" />
                         <button onClick={handleCopy} className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 transition-colors flex-shrink-0">
                             {copied ? 'Copiado!' : 'Copiar'}
                         </button>
@@ -1227,7 +1227,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         setMessage(null);
         const unmaskedPhone = phone.replace(/\D/g, '');
         if (unmaskedPhone.length < 10 || unmaskedPhone.length > 11) {
-            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 10 ou 11 dígitos (DDD + número).' });
+            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 10 ou 11 dígitos (DDD + número).');
             return;
         }
 
@@ -1303,7 +1303,8 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             const isAvailable = isDayAvailable(date);
             const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
             
-            let classes = "w-10 h-10 flex items-center justify-center rounded-full transition-colors text-sm ";
+            // Mobile Optimization: Reduced size from w-10 to w-9/w-8 for very small screens
+            let classes = "w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-colors text-sm ";
             if (isAvailable) {
                 classes += isSelected 
                     ? "bg-gray-200 text-black font-bold" 
@@ -1326,10 +1327,10 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                     <h3 className="font-bold text-white text-lg">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
                     <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
                 </div>
-                <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-xs text-gray-400 mb-2">
                     {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
                 </div>
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2 place-items-center">
                     {days}
                 </div>
             </div>
@@ -2147,10 +2148,10 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
       <div className="flex h-[100dvh] bg-black overflow-hidden">
         {/* Mobile Menu Overlay */}
         {isMobileMenuOpen && (
-            <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+            <div className="fixed inset-0 bg-black/60 z-50 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
         )}
         {/* Sidebar */}
-        <aside className={`fixed md:relative h-full w-64 glassmorphism p-6 flex flex-col z-40 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed md:relative h-full w-64 glassmorphism p-6 flex flex-col z-50 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden absolute top-4 right-4 text-gray-400 hover:text-white z-50">
                 <XIcon className="w-6 h-6" />
             </button>
@@ -2202,7 +2203,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col h-[100dvh] overflow-y-auto scrollbar-hide">
-          <header className="glassmorphism p-4 sm:p-6 border-b border-gray-800/50 flex flex-wrap justify-between items-center gap-4 sticky top-0 z-20">
+          <header className="glassmorphism p-3 sm:p-6 border-b border-gray-800/50 flex flex-wrap justify-between items-center gap-2 sm:gap-4 sticky top-0 z-20">
              <div className="flex items-center gap-2">
                 <button onClick={() => setIsMobileMenuOpen(true)} className="p-1 md:hidden text-gray-300">
                     <MenuIcon className="w-6 h-6" />
@@ -2213,14 +2214,16 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 {profile?.plan === 'premium' ? (
                     <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-2 bg-green-500/20 border border-green-400/30">
                         <StarIcon className="w-5 h-5 text-yellow-400" />
-                        <span className="font-bold text-white">Plano Premium</span>
+                        <span className="font-bold text-white hidden sm:inline">Plano Premium</span>
+                        <span className="font-bold text-white sm:hidden">Premium</span>
                     </div>
                 ) : (
                     <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3 border-yellow-500/30 border">
-                        <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
+                        <span className="font-bold text-white hidden sm:inline">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
+                        <span className="font-bold text-white sm:hidden">{`${usage}/${TRIAL_LIMIT}`}</span>
                         <button
                             onClick={handleUpgrade}
-                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
+                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all text-xs sm:text-sm"
                         >
                             UPGRADE
                         </button>
@@ -2250,7 +2253,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         onClick={() => { if (!hasReachedLimit) setIsModalOpen(true); }}
                         disabled={hasReachedLimit}
                         style={hasReachedLimit ? { pointerEvents: 'none' } : {}}
-                        className="bg-white text-black font-bold py-2 px-5 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-white text-black font-bold py-2 px-3 sm:px-5 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <PlusIcon className="w-5 h-5"/>
                         <span className="hidden sm:inline">Novo Agendamento</span>
