@@ -1,19 +1,18 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-// Fix: Removed unused and conflicting RealtimeChannel import.
-import { createClient } from '@supabase/supabase-js';
+// Fix: Use AuthSession instead of Session if the type is expected as AuthSession in this version of the SDK
+import { createClient, type AuthSession } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
-import { App as CapacitorApp } from '@capacitor/app';
+import { CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
-// Firebase Web SDK
-// Fix: Added ts-ignore to suppress potential member export errors in environments with conflicting types.
-// @ts-ignore
+// Firebase Web SDK Imports
+// Fix: Ensure initializeApp is correctly imported from the firebase/app module
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
@@ -23,7 +22,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 
-// Configurações do Firebase extraídas dos dados fornecidos
+// Firebase Config
 const firebaseConfig = {
   apiKey: "AIzaSyAY16KjixfTRn9lxHuGF2B0-v5nAeOJSlI",
   authDomain: "agendamento-link-e6f81.firebaseapp.com",
@@ -34,14 +33,27 @@ const firebaseConfig = {
   measurementId: "G-RPF9VVVM8N"
 };
 
-// Chave VAPID obrigatória para Web Push (Deve estar no .env da Vercel)
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
-  throw new Error(`Variáveis de ambiente do Supabase/Produção ausentes.`);
+  const missingVars = [
+    !SUPABASE_URL && "VITE_SUPABASE_URL",
+    !SUPABASE_ANON_KEY && "VITE_SUPABASE_ANON_KEY",
+    !PRODUCTION_URL && "VITE_PRODUCTION_URL"
+  ].filter(Boolean).join(', ');
+  throw new Error(`Variáveis de ambiente ausentes: ${missingVars}.`);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Registro do Service Worker para Web Push
+if ('serviceWorker' in navigator && Capacitor.getPlatform() === 'web') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/firebase-messaging-sw.js')
+      .then(reg => console.log('SW Push registrado:', reg.scope))
+      .catch(err => console.error('Erro SW Push:', err));
+  });
+}
 
 // --- Tipos ---
 type Appointment = {
@@ -169,53 +181,47 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [usage, setUsage] = useState(profile?.daily_usage ?? 0);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    // --- LÓGICA DE NOTIFICAÇÃO WEB PUSH UNIFICADA ---
-    useEffect(() => {
-        if (!user.id) return;
+    const registerForPushNotifications = async (userId: string) => {
+        const platform = Capacitor.getPlatform();
 
-        const registerNotifications = async () => {
-            const platform = Capacitor.getPlatform();
+        if (platform === 'web') {
+            try {
+                const app = initializeApp(firebaseConfig);
+                const messaging = getMessaging(app);
 
-            if (platform === 'web') {
-                try {
-                    // Inicializa Firebase Web
-                    const app = initializeApp(firebaseConfig);
-                    const messaging = getMessaging(app);
-
-                    const permission = await Notification.requestPermission();
-                    if (permission === 'granted') {
-                        // Registra o token Web Push para este navegador
-                        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-                        if (token) {
-                            console.log("Token Web Capturado:", token);
-                            await supabase.functions.invoke('register-push-token', { body: { token } });
-                        }
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+                    if (token) {
+                        await supabase.functions.invoke('register-push-token', { body: { token } });
+                        console.log("Web Push Token registrado.");
                     }
-                    
-                    // Listener para mensagens com a aba aberta
-                    onMessage(messaging, (payload) => {
-                        console.log('Mensagem recebida (foreground):', payload);
-                        alert(`${payload.notification?.title}: ${payload.notification?.body}`);
-                    });
-
-                } catch (e) { console.error("Erro ao configurar Firebase Web:", e); }
-            } else {
-                // Lógica Capacitor Push (Android/iOS)
-                try {
-                    let permStatus = await PushNotifications.checkPermissions();
-                    if (permStatus.receive === 'prompt') permStatus = await PushNotifications.requestPermissions();
-                    if (permStatus.receive === 'granted') {
-                        await PushNotifications.register();
-                        PushNotifications.addListener('registration', async (token) => {
-                            await supabase.functions.invoke('register-push-token', { body: { token: token.value } });
-                        });
+                }
+                
+                onMessage(messaging, (payload) => {
+                    if (payload.notification) {
+                        alert(`${payload.notification.title}: ${payload.notification.body}`);
                     }
-                } catch (e) { console.error("Erro Push Capacitor:", e); }
+                });
+            } catch (e) {
+                console.error("Erro Web Push:", e);
             }
-        };
-
-        registerNotifications();
-    }, [user.id]);
+        } else {
+            // Lógica Nativa (Capacitor)
+            try {
+                let permStatus = await PushNotifications.checkPermissions();
+                if (permStatus.receive === 'prompt') permStatus = await PushNotifications.requestPermissions();
+                if (permStatus.receive === 'granted') {
+                    await PushNotifications.register();
+                    PushNotifications.addListener('registration', async (token) => {
+                        await supabase.functions.invoke('register-push-token', { body: { token: token.value } });
+                    });
+                }
+            } catch (e) {
+                console.error("Erro Native Push:", e);
+            }
+        }
+    };
 
     const fetchDashboardData = useCallback(async () => {
         const { data } = await supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false });
@@ -223,9 +229,12 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     }, [user.id]);
 
     useEffect(() => {
-        fetchDashboardData();
-        const broadcastChannel = supabase.channel(`dashboard-${user.id}`).on('broadcast', { event: 'new_public_appointment' }, () => fetchDashboardData()).subscribe();
-        return () => { supabase.removeChannel(broadcastChannel); };
+        if (user.id) {
+            fetchDashboardData();
+            registerForPushNotifications(user.id);
+            const broadcastChannel = supabase.channel(`dashboard-${user.id}`).on('broadcast', { event: 'new_public_appointment' }, () => fetchDashboardData()).subscribe();
+            return () => { supabase.removeChannel(broadcastChannel); };
+        }
     }, [user.id, fetchDashboardData]);
 
     return (
@@ -237,7 +246,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     <li><button className="w-full flex items-center space-x-3 text-gray-300 bg-gray-700/50 p-3 rounded-lg"><CalendarIcon className="w-5 h-5"/><span>Agendamentos</span></button></li>
                 </ul>
             </nav>
-            {/* Fix: Added explicit cast to bypass type error on signOut */}
              <button onClick={() => (supabase.auth as any).signOut()} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 p-3 rounded-lg"><LogOutIcon className="w-5 h-5"/><span>Sair</span></button>
         </aside>
 
@@ -265,7 +273,6 @@ const App = () => {
 
     useEffect(() => {
         const sync = async () => {
-            // Fix: Added explicit cast to bypass type error on getSession
             const { data: { session } } = await (supabase.auth as any).getSession();
             if (session) {
                 setUser({ id: session.user.id, email: session.user.email });
@@ -275,7 +282,6 @@ const App = () => {
             setIsLoading(false);
         };
         sync();
-        // Fix: Added explicit cast to bypass type error on onAuthStateChange
         (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
             if (session) setUser({ id: session.user.id, email: session.user.email });
             else setUser(null);

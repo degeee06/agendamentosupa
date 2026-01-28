@@ -7,7 +7,6 @@ declare global {
     readonly VITE_MP_CLIENT_ID: string;
     readonly VITE_MP_REDIRECT_URL: string;
     readonly VITE_REVENUECAT_ANDROID_KEY: string;
-    // VAPID KEY necessária para o Web Push do Firebase
     readonly VITE_FIREBASE_VAPID_KEY: string;
   }
 

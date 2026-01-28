@@ -17,7 +17,7 @@ const messaging = firebase.messaging();
 
 // Handler para mensagens recebidas com o navegador fechado ou aba em background
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Background message received:', payload);
+  console.log('[firebase-messaging-sw.js] Mensagem em background:', payload);
   
   const notificationTitle = payload.notification.title || "Novo Agendamento";
   const notificationOptions = {
