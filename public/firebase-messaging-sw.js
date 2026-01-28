@@ -26,16 +26,25 @@ self.addEventListener('activate', (event) => {
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano ', payload);
   
+  // O Firebase/Navegador pode tentar mostrar uma notificação automaticamente se o payload tiver "notification".
+  // Para evitar duplicação em alguns casos, mas garantir personalização (como o clique), 
+  // vamos verificar se precisamos mostrar manualmente.
+  
   const notificationTitle = payload.notification?.title || payload.data?.title;
   const notificationBody = payload.notification?.body || payload.data?.body;
   const notificationIcon = payload.notification?.icon || '/icon.svg';
 
+  // Se o payload vier com "notification", o navegador geralmente mostra sozinho.
+  // Mas como queremos garantir o clique e icon, definimos as opções.
+  // O SDK do Firebase tenta consolidar isso, mas para garantir:
+  
   if (notificationTitle) {
       const notificationOptions = {
         body: notificationBody,
         icon: notificationIcon,
         badge: '/icon.svg',
         renotify: true,
+        tag: 'oubook-notification', // Tag única impede múltiplas notificações empilhadas do mesmo assunto
         requireInteraction: true,
         data: payload.data
       };
@@ -44,53 +53,26 @@ messaging.onBackgroundMessage((payload) => {
   }
 });
 
-// --- FALLBACK CRÍTICO PARA ANDROID/CHROME ---
-// Se o Firebase falhar em acordar o SW para 'onBackgroundMessage',
-// este listener nativo captura o evento push bruto e força a exibição.
-self.addEventListener('push', (event) => {
-    // Se o evento tem dados, tenta processar.
-    // O Firebase geralmente intercepta isso antes, mas se falhar, este bloco garante a entrega.
-    if (event.data) {
-        try {
-            const payload = event.data.json();
-            // Verifica se é uma notificação do Firebase (geralmente tem 'notification' ou 'data')
-            if (payload.notification || payload.data) {
-                const title = payload.notification?.title || payload.data?.title || 'Nova Notificação';
-                const options = {
-                    body: payload.notification?.body || payload.data?.body || '',
-                    icon: '/icon.svg',
-                    badge: '/icon.svg',
-                    data: payload.data,
-                    requireInteraction: true
-                };
-                
-                // Usa waitUntil para manter o SW vivo até a notificação ser mostrada
-                event.waitUntil(
-                    self.registration.showNotification(title, options)
-                );
-            }
-        } catch (e) {
-            console.log('Push event recebido, mas não foi possível parsear JSON ou já foi tratado.', e);
-        }
-    }
-});
-
+// Listener para clique na notificação
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  
+  // Tenta recuperar dados da URL de destino (se houver) ou abre a raiz
+  const targetUrl = event.notification.data?.landing_page || '/';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      // Se houver uma janela aberta, foca nela
-      if (clientList.length > 0) {
-        let client = clientList[0];
-        for (let i = 0; i < clientList.length; i++) {
-          if (clientList[i].focused) {
-            client = clientList[i];
-          }
+      // Se houver uma janela aberta do app, foca nela
+      for (let i = 0; i < clientList.length; i++) {
+        let client = clientList[i];
+        if (client.url.includes(self.registration.scope) && 'focus' in client) {
+          return client.focus();
         }
-        return client.focus();
       }
       // Se não, abre uma nova
-      return clients.openWindow('/');
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
     })
   );
 });
