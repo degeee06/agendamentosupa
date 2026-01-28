@@ -1,138 +1,284 @@
-
+// Importa os módulos Deno necessários.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.4/mod.ts";
-import webpush from "https://esm.sh/web-push";
 
-// FIX: Declare Deno to satisfy TypeScript type checker in non-Deno environments.
+// Declaração para satisfazer o verificador de tipos do TypeScript.
 declare const Deno: any;
 
+// Headers CORS padrão.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper para resposta de erro com CORS
-const errorResponse = (msg: string, status = 400) => new Response(
-  JSON.stringify({ error: msg }), 
-  { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-);
+const DenoEnv = (Deno as any).env;
 
-async function getAccessToken(serviceAccountJSON: string | undefined) {
-  if (!serviceAccountJSON) return null;
-  try {
-    const serviceAccount = JSON.parse(serviceAccountJSON);
-    const privateKeyData = atob(serviceAccount.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\n/g, ''));
-    const privateKeyBuffer = new Uint8Array(privateKeyData.length);
-    for (let i = 0; i < privateKeyData.length; i++) privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
-    const key = await crypto.subtle.importKey("pkcs8", privateKeyBuffer, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, true, ["sign"]);
-    const jwt = await create({ alg: "RS256", typ: "JWT" }, { iss: serviceAccount.client_email, scope: "https://www.googleapis.com/auth/firebase.messaging", aud: "https://oauth2.googleapis.com/token", exp: getNumericDate(3600), iat: getNumericDate(0) }, key);
-    const res = await fetch("https://oauth2.googleapis.com/token", { 
-      method: "POST", 
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }, 
-      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: jwt }) 
-    });
-    const data = await res.json();
-    return data.access_token;
-  } catch (e) { 
-    console.error("AccessToken Error:", e);
-    return null; 
+// Função auxiliar para obter um token de acesso OAuth2 a partir da chave da conta de serviço.
+async function getAccessToken() {
+  const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
+  if (!serviceAccountJSON) {
+    throw new Error('O segredo FCM_SERVICE_ACCOUNT_KEY não está configurado no Supabase.');
   }
+
+  const serviceAccount = JSON.parse(serviceAccountJSON);
+
+  // Formata a chave privada para importação.
+  const privateKeyData = atob(
+    serviceAccount.private_key
+      .replace('-----BEGIN PRIVATE KEY-----', '')
+      .replace('-----END PRIVATE KEY-----', '')
+      .replace(/\\n/g, '') // FIX: Correctly remove escaped newlines from the environment secret.
+  );
+  const privateKeyBuffer = new Uint8Array(privateKeyData.length);
+  for (let i = 0; i < privateKeyData.length; i++) {
+    privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
+  }
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    privateKeyBuffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    true,
+    ["sign"]
+  );
+
+  // Cria o JWT para solicitar o token de acesso.
+  const jwt = await create({ alg: "RS256", typ: "JWT" }, {
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: getNumericDate(3600), // Expira em 1 hora
+    iat: getNumericDate(0),
+  }, key);
+
+  // Solicita o token de acesso ao Google.
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+
+  const tokenData = await tokenResponse.json();
+  if (!tokenResponse.ok) {
+    throw new Error(`Erro ao obter token de acesso: ${JSON.stringify(tokenData)}`);
+  }
+
+  return tokenData.access_token;
 }
 
+
+// Função para enviar notificações push usando a API v1 do FCM.
+const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
+  try {
+    const { data: tokensData, error: tokensError } = await supabaseAdmin
+      .from('notification_tokens')
+      .select('token')
+      .eq('user_id', userId);
+
+    if (tokensError) throw tokensError;
+    if (!tokensData || tokensData.length === 0) {
+      console.log(`Nenhum token de notificação encontrado para o usuário: ${userId}`);
+      return;
+    }
+
+    const accessToken = await getAccessToken();
+    const serviceAccount = JSON.parse(DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY'));
+    const projectId = serviceAccount.project_id;
+    const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+
+    const sendPromises = tokensData.map((t: { token: string }) => {
+      const message = {
+        message: {
+          token: t.token,
+          notification: {
+            title: title,
+            body: body,
+          },
+        },
+      };
+
+      return fetch(fcmEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+    });
+
+    const responses = await Promise.all(sendPromises);
+    
+    responses.forEach(async (response, index) => {
+        if (!response.ok) {
+            console.error(`Erro ao enviar notificação para o token ${tokensData[index].token}: ${response.statusText}`, await response.text());
+        }
+    });
+
+    console.log(`Tentativa de envio de ${responses.length} notificações concluída.`);
+
+  } catch (error) {
+    console.error('Erro inesperado na função sendPushNotification:', error.message);
+  }
+};
+
+
 serve(async (req: Request) => {
-  // 1. TRATAMENTO IMEDIATO DE OPTIONS (CORS PREFLIGHT)
+  // Lida com a requisição de preflight do CORS.
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders, status: 200 });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const VAPID_PUBLIC = Deno.env.get("VAPID_PUBLIC_KEY");
-    const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY");
-    const fcmKey = Deno.env.get('FCM_SERVICE_ACCOUNT_KEY');
-
-    if (VAPID_PUBLIC && VAPID_PRIVATE) {
-      webpush.setVapidDetails("mailto:suporte@oubook.com", VAPID_PUBLIC, VAPID_PRIVATE);
-    }
-
     const { tokenId, name, phone, email, date, time } = await req.json();
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Valida Link
-    const { data: linkData, error: linkError } = await supabaseAdmin.from('one_time_links').select('user_id, is_used').eq('id', tokenId).single();
-    if (linkError || !linkData || linkData.is_used) {
-      return errorResponse('Link inválido ou já utilizado.');
+    if (!tokenId || !name || !phone || !date || !time) {
+      throw new Error('Detalhes de agendamento obrigatórios ausentes.');
     }
-
-    const adminId = linkData.user_id;
     
-    // Busca Dados do Profissional
+    // Usa o cliente admin para contornar as políticas de RLS.
+    const supabaseAdmin = createClient(
+      DenoEnv.get('SUPABASE_URL') ?? '',
+      DenoEnv.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // 1. Valida o link de uso único.
+    const { data: linkData, error: linkError } = await supabaseAdmin
+      .from('one_time_links')
+      .select('user_id, is_used')
+      .eq('id', tokenId)
+      .single();
+
+    if (linkError || !linkData) {
+      return new Response(JSON.stringify({ error: 'Link inválido ou expirado.' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    if (linkData.is_used) {
+      return new Response(JSON.stringify({ error: 'Este link de agendamento já foi utilizado.' }), {
+        status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    const adminId = linkData.user_id;
+
+    // 2. Verifica o perfil do profissional (Limites) E Perfil de Negócio (Preço) E Conexão MP.
     const [profileRes, businessRes, mpRes] = await Promise.all([
         supabaseAdmin.from('profiles').select('plan, daily_usage, last_usage_date').eq('id', adminId).single(),
         supabaseAdmin.from('business_profiles').select('service_price').eq('user_id', adminId).single(),
         supabaseAdmin.from('mp_connections').select('access_token').eq('user_id', adminId).single()
     ]);
     
-    if (profileRes.error) return errorResponse("Erro ao carregar perfil do profissional.");
+    const adminProfile = profileRes.data;
+    const businessProfile = businessRes.data;
+    const mpConnection = mpRes.data;
 
-    // Status do agendamento
-    const status = (businessRes.data?.service_price > 0 && !!mpRes.data?.access_token) ? 'Aguardando Pagamento' : 'Confirmado';
+    if (profileRes.error || !adminProfile) {
+        throw new Error('Não foi possível encontrar o perfil do profissional.');
+    }
 
-    // Salva Agendamento
-    const { data: appt, error: insertError } = await supabaseAdmin.from('appointments').insert({
-        name, email, phone, date, time, user_id: adminId, status
-    }).select().single();
+    // Verifica limite do plano Trial
+    if (adminProfile.plan === 'trial') {
+      const today = new Date().toISOString().split('T')[0];
+      const currentUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage : 0;
+      if (currentUsage >= 5) {
+        return new Response(JSON.stringify({ error: 'Este profissional atingiu o limite de agendamentos para hoje. Tente novamente amanhã.' }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+      }
+    }
+
+    // 3. Determina o status inicial
+    // Se preço > 0 E tem conta conectada -> Aguardando Pagamento
+    // Se preço == 0 OU não tem conta -> Confirmado
+    const servicePrice = businessProfile?.service_price || 0;
+    const hasMpConnection = !!mpConnection?.access_token;
+    
+    let initialStatus = 'Aguardando Pagamento';
+    if (servicePrice <= 0 || !hasMpConnection) {
+        initialStatus = 'Confirmado';
+    }
+
+    // 4. Insere o novo agendamento
+    const { data: newAppointment, error: insertError } = await supabaseAdmin
+      .from('appointments')
+      .insert({
+        name, email, phone, date, time, user_id: adminId, status: initialStatus
+      })
+      .select()
+      .single();
 
     if (insertError) throw insertError;
 
-    // Atualiza o link para usado
-    await supabaseAdmin.from('one_time_links').update({ is_used: true, appointment_id: appt.id }).eq('id', tokenId);
-
-    // Broadcast para o Dashboard (Realtime)
-    const channel = supabaseAdmin.channel(`dashboard-${adminId}`);
-    await channel.send({ type: 'broadcast', event: 'new_public_appointment', payload: appt });
+    // 5. Atualiza a contagem de uso se for um plano 'trial'.
+    if (adminProfile.plan === 'trial') {
+      const today = new Date().toISOString().split('T')[0];
+      const newUsage = adminProfile.last_usage_date === today ? adminProfile.daily_usage + 1 : 1;
+      const { error: updateProfileError } = await supabaseAdmin
+        .from('profiles')
+        .update({ daily_usage: newUsage, last_usage_date: today })
+        .eq('id', adminId);
+      
+      if (updateProfileError) {
+        console.error(`CRÍTICO: Falha ao atualizar o uso para ${adminId} após o agendamento.`, updateProfileError);
+      }
+    }
     
-    // ENVIO DE NOTIFICAÇÃO (SILENCIOSO - NÃO TRAVA O RESTO)
-    (async () => {
-      try {
-        const { data: tokensData } = await supabaseAdmin.from('notification_tokens').select('token').eq('user_id', adminId);
-        if (!tokensData || tokensData.length === 0) return;
+    // 6. Marca o link como utilizado E vincula o appointment_id.
+    const { error: updateLinkError } = await supabaseAdmin
+      .from('one_time_links')
+      .update({ 
+        is_used: true,
+        appointment_id: newAppointment.id 
+      })
+      .eq('id', tokenId);
+    
+    if (updateLinkError) {
+      console.error(`CRÍTICO: Falha ao marcar o link ${tokenId} como usado após o agendamento.`, updateLinkError);
+    }
 
-        const accessToken = await getAccessToken(fcmKey);
-        const projectId = fcmKey ? JSON.parse(fcmKey).project_id : null;
-        const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        const title = status === 'Confirmado' ? 'Novo Agendamento Confirmado!' : 'Novo Agendamento (Pendente)';
-        const body = `${name} agendou para ${formattedDate} às ${time}.`;
+    // 7. Envia uma notificação de broadcast para o dashboard do usuário.
+    const channel = supabaseAdmin.channel(`dashboard-${adminId}`);
+    await channel.send({
+      type: 'broadcast',
+      event: 'new_public_appointment',
+      payload: newAppointment,
+    });
+    
+    // Notificação Push:
+    // Se já confirmou (grátis), avisa que confirmou. Se pendente, avisa que é pendente.
+    const formattedDate = new Date(date + 'T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    
+    let pushTitle = 'Novo Agendamento';
+    let pushBody = `${name} agendou para ${formattedDate} às ${time}.`;
 
-        for (const t of tokensData) {
-          const tokenStr = t.token.trim();
-          if (tokenStr.startsWith('{')) {
-             try {
-               await webpush.sendNotification(JSON.parse(tokenStr), JSON.stringify({ title, body, url: "/" }));
-             } catch (e) { console.error("Web Push fail", e); }
-          } else if (accessToken && projectId) {
-             try {
-               await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ message: { token: tokenStr, notification: { title, body } } })
-               });
-             } catch (e) { console.error("FCM fail", e); }
-          }
-        }
-      } catch (e) { console.error("Notification loop error", e); }
-    })();
+    if (initialStatus === 'Aguardando Pagamento') {
+        pushTitle = 'Novo Agendamento (Pendente)';
+        pushBody = `${name} iniciou um agendamento. Aguardando pagamento.`;
+    } else {
+        pushTitle = 'Novo Agendamento Confirmado!';
+        pushBody = `${name} agendou para ${formattedDate} às ${time}.`;
+    }
 
-    return new Response(JSON.stringify({ success: true, appointment: appt }), { 
-      headers: { ...corsHeaders, "Content-Type": "application/json" }, 
-      status: 200 
+    await sendPushNotification(
+      supabaseAdmin,
+      adminId,
+      pushTitle,
+      pushBody
+    );
+
+    return new Response(JSON.stringify({ success: true, appointment: newAppointment }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
     });
 
-  } catch (error: any) {
-    console.error("Critical Error:", error);
-    return errorResponse(error.message || 'Erro interno no servidor', 500);
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    });
   }
 });
