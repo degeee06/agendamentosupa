@@ -17,15 +17,26 @@ const DenoEnv = (Deno as any).env;
 // Função auxiliar para obter um token de acesso OAuth2 a partir da chave da conta de serviço.
 async function getAccessToken() {
   try {
-    const serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
+    let serviceAccountJSON = DenoEnv.get('FCM_SERVICE_ACCOUNT_KEY');
     if (!serviceAccountJSON) {
       throw new Error('Secret FCM_SERVICE_ACCOUNT_KEY ausente.');
+    }
+
+    // Tenta lidar com casos onde a string do segredo pode ter aspas extras ou formatação incorreta
+    serviceAccountJSON = serviceAccountJSON.trim();
+    if (serviceAccountJSON.startsWith('"') && serviceAccountJSON.endsWith('"')) {
+       serviceAccountJSON = serviceAccountJSON.slice(1, -1);
     }
 
     let serviceAccount;
     try {
         serviceAccount = JSON.parse(serviceAccountJSON);
+        // Se o parse resultou em uma string (dupla stringificação), faz parse de novo
+        if (typeof serviceAccount === 'string') {
+            serviceAccount = JSON.parse(serviceAccount);
+        }
     } catch (e) {
+        console.error("Erro de Parse JSON:", e);
         throw new Error('Falha ao fazer parse do JSON do FCM_SERVICE_ACCOUNT_KEY. Verifique se o conteúdo é um JSON válido.');
     }
 
@@ -33,15 +44,25 @@ async function getAccessToken() {
         throw new Error('JSON da conta de serviço incompleto (falta private_key ou client_email).');
     }
 
-    // Formata a chave privada para importação de forma robusta.
-    // Remove cabeçalhos, rodapés e quaisquer caracteres de espaço em branco (incluindo \n reais ou literais).
-    const privateKeyPEM = serviceAccount.private_key
-      .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-      .replace(/-----END PRIVATE KEY-----/g, '')
-      .replace(/\\n/g, '') // Remove literais \n
-      .replace(/\s+/g, ''); // Remove quebras de linha reais e espaços
+    // --- LIMPEZA ROBUSTA DA CHAVE PRIVADA ---
+    let privateKey = serviceAccount.private_key;
+    
+    // 1. Converte literais \n em quebras de linha reais
+    if (privateKey.includes('\\n')) {
+      privateKey = privateKey.replace(/\\n/g, '\n');
+    }
 
-    const privateKeyData = atob(privateKeyPEM);
+    // 2. Remove cabeçalhos e rodapés
+    const privateKeyBody = privateKey
+      .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+      .replace(/-----END PRIVATE KEY-----/g, '');
+
+    // 3. Remove TODOS os caracteres de espaço em branco (espaços, tabs, quebras de linha)
+    // Isso deixa apenas a string Base64 pura.
+    const privateKeyBase64 = privateKeyBody.replace(/\s/g, '');
+
+    // 4. Decodifica Base64 para binário
+    const privateKeyData = atob(privateKeyBase64);
     const privateKeyBuffer = new Uint8Array(privateKeyData.length);
     for (let i = 0; i < privateKeyData.length; i++) {
       privateKeyBuffer[i] = privateKeyData.charCodeAt(i);
@@ -76,7 +97,8 @@ async function getAccessToken() {
 
     const tokenData = await tokenResponse.json();
     if (!tokenResponse.ok) {
-      throw new Error(`Google Auth Falhou: ${JSON.stringify(tokenData)}`);
+      console.error("Resposta de Erro do Google:", tokenData);
+      throw new Error(`Google Auth Falhou: ${tokenData.error_description || JSON.stringify(tokenData)}`);
     }
 
     return { accessToken: tokenData.access_token, projectId: serviceAccount.project_id };
@@ -100,19 +122,26 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
 
     if (tokensError) {
         console.error('Erro ao buscar tokens no Supabase:', tokensError);
-        return { success: false, error: 'Database error fetching tokens' };
+        return { success: false, error: 'Erro de Banco de Dados: ' + tokensError.message };
     }
     
     if (!tokensData || tokensData.length === 0) {
       console.log(`Nenhum token de notificação encontrado na tabela 'notification_tokens' para o usuário: ${userId}`);
-      return { success: false, error: 'No tokens found for user' };
+      return { success: false, error: 'Nenhum dispositivo registrado para este usuário. Ative as notificações no App.' };
     }
 
     console.log(`Encontrados ${tokensData.length} tokens para o usuário.`);
 
     // 2. Obtém Acesso ao FCM
-    const { accessToken, projectId } = await getAccessToken();
-    console.log(`Access Token gerado com sucesso. Project ID: ${projectId}`);
+    let accessToken, projectId;
+    try {
+        const auth = await getAccessToken();
+        accessToken = auth.accessToken;
+        projectId = auth.projectId;
+        console.log(`Access Token gerado com sucesso. Project ID: ${projectId}`);
+    } catch (e) {
+        return { success: false, error: 'Erro na Autenticação Google: ' + e.message };
+    }
 
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
@@ -141,8 +170,7 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
           if (!res.ok) {
               const text = await res.text();
               console.error(`FCM Rejeitou token ${t.token.substring(0, 10)}...:`, res.status, text);
-              // Opcional: Remover token inválido do banco se o erro for UNREGISTERED
-              return { success: false, error: text };
+              return { success: false, error: `FCM Error (${res.status}): ${text}` };
           } else {
               const json = await res.json();
               console.log(`Sucesso FCM para token ${t.token.substring(0, 10)}...:`, json);
@@ -150,7 +178,7 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
           }
       } catch (fetchErr) {
           console.error(`Erro de rede ao contatar FCM para token ${t.token}:`, fetchErr);
-          return { success: false, error: fetchErr.message };
+          return { success: false, error: 'Network Error: ' + fetchErr.message };
       }
     });
 
@@ -158,11 +186,16 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
     const successes = results.filter(r => r.success).length;
     console.log(`Envio concluído. Sucessos: ${successes}/${results.length}`);
     
+    if (successes === 0) {
+        // Se todos falharam, retorna o erro do primeiro
+        return { success: false, error: results[0]?.error || 'Todos os envios falharam.' };
+    }
+    
     return { success: successes > 0, results };
 
   } catch (error) {
     console.error('Erro fatal em sendPushNotification:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Erro Interno: ' + error.message };
   }
 };
 
@@ -195,14 +228,9 @@ serve(async (req: Request) => {
             'Se você está lendo isso, seu sistema de notificações está configurado corretamente! 🚀'
         );
         
-        if (!result.success) {
-             return new Response(JSON.stringify({ error: 'Falha no envio do teste.', details: result }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 500,
-            });
-        }
-
-        return new Response(JSON.stringify({ success: true, details: result }), {
+        // RETORNA 200 MESMO COM ERRO PARA QUE O CLIENTE POSSA LER O CORPO "result"
+        // O cliente verificará `data.success`
+        return new Response(JSON.stringify({ success: result.success, details: result }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         });
