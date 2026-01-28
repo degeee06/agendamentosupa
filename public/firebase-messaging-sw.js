@@ -26,25 +26,26 @@ self.addEventListener('activate', (event) => {
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano ', payload);
   
-  // O Firebase/Navegador pode tentar mostrar uma notificação automaticamente se o payload tiver "notification".
-  // Para evitar duplicação em alguns casos, mas garantir personalização (como o clique), 
-  // vamos verificar se precisamos mostrar manualmente.
-  
-  const notificationTitle = payload.notification?.title || payload.data?.title;
-  const notificationBody = payload.notification?.body || payload.data?.body;
-  const notificationIcon = payload.notification?.icon || '/icon.svg';
+  // CORREÇÃO DE DUPLICIDADE:
+  // Se o payload já tem "notification", o navegador exibe automaticamente.
+  // Não devemos chamar showNotification novamente.
+  if (payload.notification) {
+      console.log("Notificação gerenciada pelo sistema (payload contém chave 'notification').");
+      return; 
+  }
 
-  // Se o payload vier com "notification", o navegador geralmente mostra sozinho.
-  // Mas como queremos garantir o clique e icon, definimos as opções.
-  // O SDK do Firebase tenta consolidar isso, mas para garantir:
-  
+  // Apenas exibe manualmente se for uma mensagem somente de dados (Data-only)
+  const notificationTitle = payload.data?.title;
+  const notificationBody = payload.data?.body;
+  const notificationIcon = '/icon.svg';
+
   if (notificationTitle) {
       const notificationOptions = {
         body: notificationBody,
         icon: notificationIcon,
         badge: '/icon.svg',
         renotify: true,
-        tag: 'oubook-notification', // Tag única impede múltiplas notificações empilhadas do mesmo assunto
+        tag: 'oubook-notification',
         requireInteraction: true,
         data: payload.data
       };
