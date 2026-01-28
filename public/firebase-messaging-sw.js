@@ -1,9 +1,9 @@
 
-// Importa os SDKs necessários no formato compatível
+// Importa o SDK do Firebase versão compat para o Service Worker
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-// Configuração idêntica à do frontend
+// Configurações idênticas ao frontend
 firebase.initializeApp({
   apiKey: "AIzaSyAY16KjixfTRn9lxHuGF2B0-v5nAeOJSlI",
   authDomain: "agendamento-link-e6f81.firebaseapp.com",
@@ -15,9 +15,10 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Escuta mensagens recebidas quando a aba está fechada ou em segundo plano
+// Handler para mensagens recebidas com o navegador fechado ou aba em background
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano: ', payload);
+  console.log('[firebase-messaging-sw.js] Background message received:', payload);
+  
   const notificationTitle = payload.notification.title || "Novo Agendamento";
   const notificationOptions = {
     body: payload.notification.body || "Você tem uma nova atualização no Oubook.",

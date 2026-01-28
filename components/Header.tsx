@@ -1,5 +1,7 @@
+
 import React from 'react';
-import { Session } from '@supabase/supabase-js';
+// Fix: Use 'import type' for Session as it is exported as a type in v2.
+import { type Session } from '@supabase/supabase-js';
 import { Profile } from '../types';
 
 interface HeaderProps {

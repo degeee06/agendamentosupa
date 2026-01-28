@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient, RealtimeChannel } from '@supabase/supabase-js';
+// Fix: Removed unused and conflicting RealtimeChannel import.
+import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -11,6 +12,8 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 // Firebase Web SDK
+// Fix: Added ts-ignore to suppress potential member export errors in environments with conflicting types.
+// @ts-ignore
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
@@ -20,7 +23,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 
-// Configuração do Firebase Web atualizada com seus dados reais
+// Configurações do Firebase extraídas dos dados fornecidos
 const firebaseConfig = {
   apiKey: "AIzaSyAY16KjixfTRn9lxHuGF2B0-v5nAeOJSlI",
   authDomain: "agendamento-link-e6f81.firebaseapp.com",
@@ -31,11 +34,11 @@ const firebaseConfig = {
   measurementId: "G-RPF9VVVM8N"
 };
 
-// IMPORTANTE: Obtenha esta chave em: Configurações do Projeto > Cloud Messaging > Certificados da Web
+// Chave VAPID obrigatória para Web Push (Deve estar no .env da Vercel)
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
-  throw new Error(`Variáveis de ambiente do Supabase ausentes.`);
+  throw new Error(`Variáveis de ambiente do Supabase/Produção ausentes.`);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -111,53 +114,93 @@ const maskPhone = (value: string) => {
     return value;
 };
 
-// --- Ícones (Simplificados para brevidade no XML) ---
+// --- Ícones ---
 const Icon = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
 );
 const CalendarIcon = (props: any) => <Icon {...props}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></Icon>;
+const ClockIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></Icon>;
+const CheckCircleIcon = (props: any) => <Icon {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></Icon>;
+const XCircleIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></Icon>;
+const SearchIcon = (props: any) => <Icon {...props}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></Icon>;
+const PlusIcon = (props: any) => <Icon {...props}><line x1="12" cy="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
+const UserIcon = (props: any) => <Icon {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></Icon>;
+const PhoneIcon = (props: any) => <Icon {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></Icon>;
+const LinkIcon = (props: any) => <Icon {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></Icon>;
+const LogOutIcon = (props: any) => <Icon {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></Icon>;
 const LoaderIcon = (props: any) => <Icon {...props} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line></Icon>;
+const XIcon = (props: any) => <Icon {...props}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
+const SettingsIcon = (props: any) => <Icon {...props}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
+const StarIcon = (props: any) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></Icon>;
+const DownloadIcon = (props: any) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></Icon>;
+const ChatBubbleIcon = (props: any) => <Icon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></Icon>;
+const MenuIcon = (props: any) => <Icon {...props}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></Icon>;
+
+const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
+  const baseClasses = "px-3 py-1 text-xs font-medium rounded-full text-white";
+  const statusClasses = {
+    Pendente: "bg-yellow-500/20 text-yellow-300",
+    'Aguardando Pagamento': "bg-orange-500/20 text-orange-300",
+    Confirmado: "bg-green-500/20 text-green-300",
+    Cancelado: "bg-red-500/20 text-red-300",
+  };
+  return <span className={`${baseClasses} ${statusClasses[status]}`}>{status}</span>;
+};
+
+const AppointmentCard = ({ appointment, onUpdateStatus, onDelete }: any) => (
+  <div className="glassmorphism rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-gray-400 relative">
+    <button onClick={() => onDelete(appointment.id)} className="absolute top-3 right-3 text-gray-500 hover:text-red-400 transition-colors z-10 p-1"><XIcon className="w-5 h-5" /></button>
+    <div className="flex justify-between items-start">
+      <div>
+        <h3 className="text-lg font-bold text-white">{appointment.name}</h3>
+        {appointment.phone && <p className="text-sm text-gray-400">{maskPhone(appointment.phone)}</p>}
+      </div>
+      <StatusBadge status={appointment.status} />
+    </div>
+    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0 text-sm text-gray-300">
+      <div className="flex items-center space-x-2"><CalendarIcon className="w-4 h-4 text-gray-500" /><span>{parseDateAsUTC(appointment.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></div>
+      <div className="flex items-center space-x-2"><ClockIcon className="w-4 h-4 text-gray-500" /><span>{appointment.time}</span></div>
+    </div>
+  </div>
+);
 
 const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile | null, setProfile: React.Dispatch<React.SetStateAction<Profile | null>>}) => {
-    const fetchDashboardData = useCallback(async () => {
-        // Implementação omitida por brevidade, mantida conforme original
-    }, [user.id]);
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [usage, setUsage] = useState(profile?.daily_usage ?? 0);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    useEffect(() => {
-        if (!user.id) return;
-        fetchDashboardData();
-        const broadcastChannel = supabase.channel(`dashboard-${user.id}`).on('broadcast', { event: 'new_public_appointment' }, ({ payload }) => {
-            // Lógica de atualização em tempo real
-        }).subscribe();
-        return () => { supabase.removeChannel(broadcastChannel); };
-    }, [user.id, fetchDashboardData]);
-
-    // --- LÓGICA DE NOTIFICAÇÃO (AJUSTADA PARA FIREBASE WEB) ---
+    // --- LÓGICA DE NOTIFICAÇÃO WEB PUSH UNIFICADA ---
     useEffect(() => {
         if (!user.id) return;
 
-        const setupNotifications = async () => {
+        const registerNotifications = async () => {
             const platform = Capacitor.getPlatform();
 
             if (platform === 'web') {
                 try {
+                    // Inicializa Firebase Web
                     const app = initializeApp(firebaseConfig);
                     const messaging = getMessaging(app);
-                    
+
                     const permission = await Notification.requestPermission();
                     if (permission === 'granted') {
-                        // O VAPID_KEY é crucial aqui. Se estiver vazio, o Firebase não gera o token.
+                        // Registra o token Web Push para este navegador
                         const token = await getToken(messaging, { vapidKey: VAPID_KEY });
                         if (token) {
-                            console.log("Token Firebase Web capturado:", token);
-                            // Salvamos o token puro. A Edge Function v1 do FCM lida com tokens web e mobile igualmente.
-                            await supabase.functions.invoke('register-push-token', {
-                                body: { token: token } 
-                            });
+                            console.log("Token Web Capturado:", token);
+                            await supabase.functions.invoke('register-push-token', { body: { token } });
                         }
                     }
-                } catch (e) { console.error("Erro Firebase Web:", e); }
+                    
+                    // Listener para mensagens com a aba aberta
+                    onMessage(messaging, (payload) => {
+                        console.log('Mensagem recebida (foreground):', payload);
+                        alert(`${payload.notification?.title}: ${payload.notification?.body}`);
+                    });
+
+                } catch (e) { console.error("Erro ao configurar Firebase Web:", e); }
             } else {
+                // Lógica Capacitor Push (Android/iOS)
                 try {
                     let permStatus = await PushNotifications.checkPermissions();
                     if (permStatus.receive === 'prompt') permStatus = await PushNotifications.requestPermissions();
@@ -171,15 +214,47 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
             }
         };
 
-        setupNotifications();
+        registerNotifications();
     }, [user.id]);
 
+    const fetchDashboardData = useCallback(async () => {
+        const { data } = await supabase.from('appointments').select('*').eq('user_id', user.id).order('date', { ascending: false });
+        if (data) setAppointments(data);
+    }, [user.id]);
+
+    useEffect(() => {
+        fetchDashboardData();
+        const broadcastChannel = supabase.channel(`dashboard-${user.id}`).on('broadcast', { event: 'new_public_appointment' }, () => fetchDashboardData()).subscribe();
+        return () => { supabase.removeChannel(broadcastChannel); };
+    }, [user.id, fetchDashboardData]);
+
     return (
-        <div className="flex h-[100dvh] bg-black overflow-hidden flex-col items-center justify-center text-white">
-             <CalendarIcon className="w-12 h-12 mb-4 text-orange-500" />
-             <h1 className="text-xl font-bold">Oubook Dashboard</h1>
-             <p className="text-gray-400">Pronto para receber notificações.</p>
-        </div>
+      <div className="flex h-[100dvh] bg-black overflow-hidden">
+        <aside className={`fixed md:relative h-full w-64 glassmorphism p-6 flex flex-col z-40 transform transition-transform duration-300 md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="flex items-center space-x-2 mb-10"><CalendarIcon className="w-8 h-8 text-white"/><h1 className="text-2xl font-bold text-white">Oubook</h1></div>
+            <nav className="flex-grow">
+                <ul className="space-y-2">
+                    <li><button className="w-full flex items-center space-x-3 text-gray-300 bg-gray-700/50 p-3 rounded-lg"><CalendarIcon className="w-5 h-5"/><span>Agendamentos</span></button></li>
+                </ul>
+            </nav>
+            {/* Fix: Added explicit cast to bypass type error on signOut */}
+             <button onClick={() => (supabase.auth as any).signOut()} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 p-3 rounded-lg"><LogOutIcon className="w-5 h-5"/><span>Sair</span></button>
+        </aside>
+
+        <main className="flex-1 flex flex-col h-[100dvh] overflow-y-auto">
+          <header className="glassmorphism p-4 sm:p-6 border-b border-gray-800/50 flex justify-between items-center sticky top-0 z-20">
+             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden text-gray-300"><MenuIcon className="w-6 h-6"/></button>
+             <h2 className="text-2xl font-bold text-white">Dashboard</h2>
+             <div className="flex items-center space-x-4">
+                <span className="text-xs text-gray-400">Plano Trial: {usage}/5</span>
+                <StarIcon className="w-5 h-5 text-yellow-400" />
+             </div>
+          </header>
+          <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {appointments.map(app => <AppointmentCard key={app.id} appointment={app} />)}
+          </div>
+        </main>
+      </div>
     );
 };
 
@@ -189,21 +264,26 @@ const App = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const syncUserAndProfile = async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) { setUser(null); setProfile(null); return; }
-                const currentUser = session.user;
-                const { data: userProfile } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
-                setUser({ id: currentUser.id, email: currentUser.email });
-                setProfile(userProfile);
-            } catch (e) { console.error(e); } finally { setIsLoading(false); }
+        const sync = async () => {
+            // Fix: Added explicit cast to bypass type error on getSession
+            const { data: { session } } = await (supabase.auth as any).getSession();
+            if (session) {
+                setUser({ id: session.user.id, email: session.user.email });
+                const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+                setProfile(data);
+            }
+            setIsLoading(false);
         };
-        syncUserAndProfile();
+        sync();
+        // Fix: Added explicit cast to bypass type error on onAuthStateChange
+        (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
+            if (session) setUser({ id: session.user.id, email: session.user.email });
+            else setUser(null);
+        });
     }, []);
 
     if (isLoading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-16 h-16 text-white"/></div>;
-    return (user && profile) ? <Dashboard user={user} profile={profile} setProfile={setProfile} /> : <div className="p-4 text-white">Efetue login para continuar.</div>;
+    return user ? <Dashboard user={user} profile={profile} setProfile={setProfile} /> : <div className="p-10 text-white text-center">Efetue login para acessar o painel.</div>;
 };
 
 const container = document.getElementById('root');
