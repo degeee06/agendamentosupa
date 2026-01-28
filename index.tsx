@@ -1227,7 +1227,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         setMessage(null);
         const unmaskedPhone = phone.replace(/\D/g, '');
         if (unmaskedPhone.length < 10 || unmaskedPhone.length > 11) {
-            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 10 ou 11 dígitos (DDD + número).');
+            setMessage({ type: 'error', text: 'Por favor, insira um telefone válido com 10 ou 11 dígitos (DDD + número).' });
             return;
         }
 
