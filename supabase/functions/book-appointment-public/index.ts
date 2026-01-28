@@ -126,29 +126,29 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
     const sendPromises = tokensData.map(async (t: { token: string }) => {
-      // CONFIGURAÇÃO DE PRIORIDADE ALTA
-      const message = {
+      // 1. TENTA ENVIAR COM ALTA PRIORIDADE E OBJETO DATA
+      const highPriorityMessage = {
         message: {
           token: t.token,
           notification: { title, body },
-          // Prioridade Android
+          data: { 
+              title: title, 
+              body: body,
+              landing_page: "/" 
+          },
           android: {
-            priority: 'high',
+            priority: 'HIGH',
             notification: {
-                priority: 'max',
+                notification_priority: 'PRIORITY_HIGH', 
                 channel_id: 'default',
-                default_sound: true
+                default_sound: true,
+                click_action: 'FLUTTER_NOTIFICATION_CLICK'
             }
           },
-          // Prioridade WebPush (Padrão RFC 8030)
           webpush: {
-            headers: {
-              Urgency: 'high'
-            },
-            notification: {
-                requireInteraction: true,
-                icon: '/icon.svg'
-            }
+            headers: { Urgency: 'high' },
+            notification: { requireInteraction: true, icon: '/icon.svg' },
+            fcm_options: { link: '/' }
           }
         },
       };
@@ -160,30 +160,55 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
               'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(message),
+            body: JSON.stringify(highPriorityMessage),
           });
           
           if (!res.ok) {
               const errorText = await res.text();
-              console.error(`FCM Rejeitou token ${t.token.substring(0, 10)}...: ${res.status}`, errorText);
-              
-              // LÓGICA DE AUTOCORREÇÃO (SELF-HEALING)
-              // Se o token for inválido (404 / UNREGISTERED / INVALID_ARGUMENT), removemos do banco.
-              let errorCode = '';
-              try {
-                  const errorJson = JSON.parse(errorText);
-                  errorCode = errorJson.error?.details?.[0]?.errorCode || errorJson.error?.status;
-              } catch (e) {}
+              console.warn(`Tentativa High Priority falhou para ${t.token.substring(0, 10)}...: ${res.status}`, errorText);
 
-              if (res.status === 404 || errorCode === 'UNREGISTERED' || errorCode === 'INVALID_ARGUMENT') {
-                  console.log(`🗑️ Removendo token inválido do banco: ${t.token.substring(0, 10)}...`);
-                  await supabaseAdmin.from('notification_tokens').delete().eq('token', t.token);
-                  return { success: false, error: 'Token removido (Inválido/Expirado)' };
+              // FALLBACK AGRESSIVO: Tenta enviar o payload mais simples possível se houver erro (400, 403, 500...)
+              if (res.status >= 400) {
+                  console.log("Tentando fallback SIMPLIFICADO...");
+                  
+                  const normalMessage = {
+                    message: {
+                        token: t.token,
+                        notification: { title, body },
+                        data: { title, body } // Mantém data pois é útil, mas remove headers de prioridade
+                    }
+                  };
+
+                  const resNormal = await fetch(fcmEndpoint, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${accessToken}`,
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(normalMessage),
+                  });
+
+                  if (!resNormal.ok) {
+                       const errorTextNormal = await resNormal.text();
+                       let errorCode = '';
+                       try {
+                          const errorJson = JSON.parse(errorTextNormal);
+                          errorCode = errorJson.error?.details?.[0]?.errorCode || errorJson.error?.status;
+                       } catch (e) {}
+                       
+                       // Apenas deleta se for explicitamente não registrado
+                       if (resNormal.status === 404 || errorCode === 'UNREGISTERED') {
+                           await supabaseAdmin.from('notification_tokens').delete().eq('token', t.token);
+                       }
+                       
+                       return { success: false, error: `Fallback Error: ${errorTextNormal}` };
+                  }
+                  return { success: true, method: 'normal_simplified' };
               }
 
               return { success: false, error: `FCM Error: ${errorText}` };
           } else {
-              return { success: true };
+              return { success: true, method: 'high' };
           }
       } catch (fetchErr) {
           return { success: false, error: 'Network Error: ' + fetchErr.message };
@@ -194,7 +219,6 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
     const successes = results.filter(r => r.success).length;
     console.log(`Envio concluído. Sucessos: ${successes}/${results.length}`);
     
-    // Se pelo menos 1 deu certo, consideramos sucesso geral, mesmo que tokens velhos tenham sido deletados.
     return { success: successes > 0, results };
 
   } catch (error) {
@@ -217,7 +241,6 @@ serve(async (req: Request) => {
       DenoEnv.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // --- MODO DE TESTE ---
     if (reqBody.action === 'test-notification') {
         const { userId } = reqBody;
         if (!userId) throw new Error('UserId obrigatório.');
@@ -235,7 +258,6 @@ serve(async (req: Request) => {
         });
     }
 
-    // --- FLUXO NORMAL DE AGENDAMENTO ---
     const { tokenId, name, phone, email, date, time } = reqBody;
 
     if (!tokenId || !name || !phone || !date || !time) {
@@ -321,10 +343,6 @@ serve(async (req: Request) => {
 
     const pushResult = await sendPushNotification(supabaseAdmin, adminId, pushTitle, pushBody);
     
-    if (!pushResult.success) {
-        console.warn("Aviso: Notificação Push falhou.", pushResult.error);
-    }
-
     return new Response(JSON.stringify({ success: true, appointment: newAppointment, pushDebug: pushResult }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

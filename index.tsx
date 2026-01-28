@@ -2258,6 +2258,24 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
              </div>
           </header>
 
+          {/* --- BANNER DE PERMISSÃO DE NOTIFICAÇÃO (NOVO) --- */}
+          {permissionStatus === 'default' && (
+              <div className="bg-blue-600 text-white p-4 flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in">
+                  <div className="flex items-center gap-3">
+                      <BellIcon className="w-6 h-6 animate-pulse" />
+                      <p className="font-medium text-sm sm:text-base">
+                          Ative as notificações para saber quando receber um novo agendamento ou pagamento.
+                      </p>
+                  </div>
+                  <button 
+                      onClick={() => registerForPushNotifications(user.id, true)}
+                      className="whitespace-nowrap bg-white text-blue-600 px-4 py-2 rounded-lg font-bold hover:bg-blue-50 transition-colors text-sm"
+                  >
+                      🔔 Ativar Notificações
+                  </button>
+              </div>
+          )}
+
           <div className="p-4 sm:p-6 flex-1">
              {/* Filtros e Busca */}
              <div className="mb-6">

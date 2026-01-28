@@ -41,7 +41,7 @@ async function getAccessToken() {
   return { accessToken: (await tokenResponse.json()).access_token, projectId: serviceAccount.project_id };
 }
 
-// Envia Push com autocorreção de tokens inválidos e PRIORIDADE ALTA
+// Envia Push com autocorreção de tokens inválidos e FALLBACK DE PRIORIDADE
 const sendPushNotification = async (supabaseAdmin: any, userId: string, title: string, body: string) => {
   try {
     const { data: tokensData } = await supabaseAdmin.from('notification_tokens').select('token').eq('user_id', userId);
@@ -51,37 +51,59 @@ const sendPushNotification = async (supabaseAdmin: any, userId: string, title: s
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${auth.projectId}/messages:send`;
 
     await Promise.all(tokensData.map(async (t: any) => {
-        try {
-            const message = {
-                message: {
-                    token: t.token,
-                    notification: { title, body },
-                    android: {
-                        priority: 'high',
-                        notification: { priority: 'max', default_sound: true }
-                    },
-                    webpush: {
-                        headers: { Urgency: 'high' },
-                        notification: { requireInteraction: true, icon: '/icon.svg' }
+        // TENTATIVA 1: ALTA PRIORIDADE + DATA
+        const highPriorityMessage = {
+            message: {
+                token: t.token,
+                notification: { title, body },
+                data: { title, body, landing_page: "/" },
+                android: {
+                    priority: 'HIGH',
+                    notification: { 
+                        notification_priority: 'PRIORITY_HIGH', 
+                        default_sound: true,
+                        click_action: 'FLUTTER_NOTIFICATION_CLICK'
                     }
+                },
+                webpush: {
+                    headers: { Urgency: 'high' },
+                    notification: { requireInteraction: true, icon: '/icon.svg' },
+                    fcm_options: { link: '/' }
                 }
-            };
+            }
+        };
 
+        try {
             const res = await fetch(fcmEndpoint, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${auth.accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(message)
+                body: JSON.stringify(highPriorityMessage)
             });
             
             if (!res.ok) {
                 const text = await res.text();
-                console.error(`FCM Erro token ${t.token.substring(0,8)}...:`, text);
-                
-                // Remove token inválido do banco
-                if (res.status === 404 || text.includes('UNREGISTERED') || text.includes('INVALID_ARGUMENT')) {
-                    console.log(`Removendo token inválido: ${t.token}`);
-                    await supabaseAdmin.from('notification_tokens').delete().eq('token', t.token);
-                }
+                // SE DER ERRO -> FALLBACK SIMPLIFICADO
+                if (res.status >= 400) {
+                     const normalMessage = {
+                         message: {
+                             token: t.token,
+                             notification: { title, body },
+                             data: { title, body } // Mantém data, remove extras
+                         }
+                     };
+                     const resNormal = await fetch(fcmEndpoint, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${auth.accessToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(normalMessage)
+                     });
+                     
+                     if (!resNormal.ok) {
+                         const textNormal = await resNormal.text();
+                         if (resNormal.status === 404 || textNormal.includes('UNREGISTERED')) {
+                             await supabaseAdmin.from('notification_tokens').delete().eq('token', t.token);
+                         }
+                     }
+                } 
             }
         } catch (e) {
             console.error('Fetch error:', e);
