@@ -1442,7 +1442,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                 )}
 
                                 <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
+                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
                                 </button>
                             </form>
                         )}
