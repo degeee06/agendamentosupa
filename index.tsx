@@ -1442,7 +1442,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                 )}
 
                                 <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
+                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
                                 </button>
                             </form>
                         )}
@@ -1782,9 +1782,24 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         });
 
                         onMessage(messaging, (payload) => {
-                            console.log('Mensagem recebida em foreground:', payload);
+                            console.log('Mensagem recebida em foreground (Web):', payload);
+                            // Tenta criar notificação visual do sistema mesmo com app aberto
                             if (payload.notification) {
-                                alert(`${payload.notification.title}\n${payload.notification.body}`);
+                                const { title, body } = payload.notification;
+                                if (Notification.permission === 'granted') {
+                                    try {
+                                        // Tenta lançar notificação nativa do browser
+                                        new Notification(title || "Nova Mensagem", {
+                                            body: body,
+                                            icon: '/icon.svg', // Usa o ícone do app
+                                        });
+                                    } catch (e) {
+                                        // Fallback para alert se o browser bloquear
+                                        alert(`${title}\n${body}`);
+                                    }
+                                } else {
+                                    alert(`${title}\n${body}`);
+                                }
                             }
                         });
                         
@@ -1828,7 +1843,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 });
 
                 PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                    alert(`${notification.title}\n${notification.body}`);
+                    // Em Apps Nativos, notificações em foreground são silenciosas por padrão.
+                    // Forçamos um alerta visual.
+                    alert(`🔔 ${notification.title}\n${notification.body}`);
                 });
         
             } catch (error) {
@@ -2304,7 +2321,7 @@ const App = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        (supabase.auth as any).getSession().then(({ data: { session } }: any) => {
             setSession(session);
             if (session) {
                 fetchProfile(session.user.id);
@@ -2315,7 +2332,7 @@ const App = () => {
 
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
             setSession(session);
             if (session) {
                 // Optimize: only fetch if needed
