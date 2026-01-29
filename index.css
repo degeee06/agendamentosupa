@@ -1,25 +1,5 @@
 /* Set base styles to match the dark theme defined in index.html */
 body {
-  background-color: #000000;
-  color: #F5F5F7;
-  /* Melhora a sensação de app nativo bloqueando o 'bounce' do scroll no topo/fundo */
-  overscroll-behavior-y: none;
-  /* Remove o highlight cinza ao tocar em botões no mobile */
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Garante que inputs não dêem zoom automático no iOS (tamanho min 16px) */
-@media screen and (max-width: 768px) {
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-}
-
-/* Esconde scrollbars mantendo funcionalidade */
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+  background-color: #111827; /* bg-gray-900 */
+  color: #f3f4f6; /* text-gray-100 */
 }
