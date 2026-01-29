@@ -128,7 +128,7 @@ const CheckCircleIcon = (p: any) => <Icon {...p}><path d="M22 11.08V12a10 10 0 1
 const XCircleIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Icon>;
 const LoaderIcon = (p: any) => <Icon {...p} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></Icon>;
 const XIcon = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>;
-const SettingsIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
+const SettingsIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
 const StarIcon = (p: any) => <Icon {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Icon>;
 const ChevronLeftIcon = (p: any) => <Icon {...p}><polyline points="15 18 9 12 15 6"/></Icon>;
 const ChevronRightIcon = (p: any) => <Icon {...p}><polyline points="9 18 15 12 9 6"/></Icon>;
@@ -232,7 +232,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
             onClick={onClose}
         >
             <div 
-                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-4 sm:p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
+                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
                 onClick={(e) => e.stopPropagation()}
             >
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
@@ -247,157 +247,13 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
     );
 };
 
-const NewAppointmentModal = ({ isOpen, onClose, onSave, user, businessProfile }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User, businessProfile: BusinessProfile | null }) => {
+const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    
-    // VISUAL PICKER STATES
-    const [mode, setMode] = useState<'visual' | 'manual'>('visual');
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-    const [selectedTime, setSelectedTime] = useState<string | null>(null);
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [dayAppointments, setDayAppointments] = useState<string[]>([]);
-    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-
-    useEffect(() => {
-        if (!isOpen) {
-            // Reset fields
-            setName(''); setEmail(''); setPhone(''); setDate(''); setTime('');
-            setSelectedDate(null); setSelectedTime(null);
-            setMode('visual');
-            setDayAppointments([]);
-        }
-    }, [isOpen]);
-
-    // Update form date/time when visual selection changes
-    useEffect(() => {
-        if (selectedDate) {
-            setDate(selectedDate.toISOString().split('T')[0]);
-        }
-        if (selectedTime) {
-            setTime(selectedTime);
-        }
-    }, [selectedDate, selectedTime]);
-
-    // Fetch appointments for the selected date
-    useEffect(() => {
-        const fetchDayAppointments = async () => {
-            if (!selectedDate || !user.id) return;
-            setIsLoadingSlots(true);
-            const dateString = selectedDate.toISOString().split('T')[0];
-            
-            const { data, error } = await supabase
-                .from('appointments')
-                .select('time')
-                .eq('user_id', user.id)
-                .eq('date', dateString)
-                .neq('status', 'Cancelado');
-            
-            if (data) {
-                setDayAppointments(data.map(d => d.time));
-            }
-            setIsLoadingSlots(false);
-        };
-        fetchDayAppointments();
-    }, [selectedDate, user.id]);
-
-    const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
-
-    const isDayAvailable = useCallback((d: Date): boolean => {
-        if (!businessProfile) return true;
-        const dateString = d.toISOString().split('T')[0];
-        const dayOfWeek = dayMap[d.getUTCDay()];
-        
-        if (businessProfile.working_days && !businessProfile.working_days[dayOfWeek]) return false;
-        if (businessProfile.blocked_dates && businessProfile.blocked_dates.includes(dateString)) return false;
-        
-        return true;
-    }, [businessProfile, dayMap]);
-
-    const availableTimeSlots = useMemo(() => {
-        if (!selectedDate || !businessProfile) return [];
-        
-        const slots = [];
-        const startTime = businessProfile.start_time || '09:00';
-        const endTime = businessProfile.end_time || '17:00';
-
-        const [startHour] = startTime.split(':').map(Number);
-        const [endHour] = endTime.split(':').map(Number);
-
-        for (let hour = startHour; hour < endHour; hour++) {
-            slots.push(`${String(hour).padStart(2, '0')}:00`);
-        }
-
-        const dayOfWeek = dayMap[selectedDate.getUTCDay()];
-        const blockedRecurringTimes = businessProfile.blocked_times[dayOfWeek] || [];
-
-        return slots.filter(slot => {
-            return !dayAppointments.includes(slot) && 
-                   !blockedRecurringTimes.includes(slot);
-        });
-    }, [selectedDate, businessProfile, dayAppointments, dayMap]);
-
-    const changeMonth = (amount: number) => {
-      setCurrentMonth(prev => {
-          const newDate = new Date(prev.getFullYear(), prev.getMonth() + amount, 1);
-          return newDate;
-      });
-    };
-
-    const handleDateSelect = (d: Date) => {
-        setSelectedDate(d);
-        setSelectedTime(null);
-    };
-
-    const Calendar = () => {
-        const year = currentMonth.getFullYear();
-        const month = currentMonth.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-        const days = Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`}></div>);
-        for (let day = 1; day <= daysInMonth; day++) {
-            const d = new Date(Date.UTC(year, month, day));
-            const isAvailable = isDayAvailable(d);
-            const isSelected = selectedDate && d.getTime() === selectedDate.getTime();
-            
-            // Reduced size for better fit on small screens
-            let classes = "w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-colors text-xs sm:text-sm ";
-            if (isAvailable) {
-                classes += isSelected 
-                    ? "bg-gray-200 text-black font-bold" 
-                    : "bg-black/20 text-white hover:bg-gray-700 cursor-pointer";
-            } else {
-                classes += "text-gray-600 cursor-not-allowed opacity-50";
-            }
-            
-            days.push(
-                <button key={day} type="button" onClick={() => handleDateSelect(d)} disabled={!isAvailable && mode === 'visual'} className={classes}>
-                    {day}
-                </button>
-            );
-        }
-
-        return (
-            <div className="bg-black/20 p-2 sm:p-4 rounded-lg overflow-hidden">
-                <div className="flex justify-between items-center mb-4">
-                    <button type="button" onClick={() => changeMonth(-1)} className="p-1 sm:p-2 rounded-full hover:bg-gray-700"><ChevronLeftIcon className="w-5 h-5 text-white"/></button>
-                    <h3 className="font-bold text-white text-base sm:text-lg">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
-                    <button type="button" onClick={() => changeMonth(1)} className="p-1 sm:p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
-                </div>
-                <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs text-gray-400 mb-2">
-                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
-                </div>
-                <div className="grid grid-cols-7 gap-1 sm:gap-2 place-items-center">
-                    {days}
-                </div>
-            </div>
-        );
-    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -409,80 +265,19 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user, businessProfile }:
         setIsSaving(true);
         await onSave(name, unmaskedPhone, email, date, time);
         setIsSaving(false);
+        setName(''); setEmail(''); setPhone(''); setDate(''); setTime('');
         onClose();
     };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Novo Agendamento">
-            <form onSubmit={handleSubmit} className="space-y-4 w-full">
-                <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm" />
-                <input type="tel" placeholder="Telefone do Cliente (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm" />
-                <input type="email" placeholder="Email do Cliente (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm" />
-                
-                <div className="flex bg-black/30 p-1 rounded-lg">
-                    <button type="button" onClick={() => setMode('visual')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'visual' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
-                        Visual
-                    </button>
-                    <button type="button" onClick={() => setMode('manual')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'manual' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
-                        Manual
-                    </button>
-                </div>
-
-                {mode === 'manual' ? (
-                    <div className="flex flex-col space-y-4">
-                        <div>
-                            <label className="block text-xs text-gray-400 mb-1 ml-1">Data</label>
-                            <input 
-                                type="date" 
-                                value={date} 
-                                onChange={e => setDate(e.target.value)} 
-                                required 
-                                className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm" 
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs text-gray-400 mb-1 ml-1">Horário</label>
-                            <input 
-                                type="time" 
-                                value={time} 
-                                onChange={e => setTime(e.target.value)} 
-                                required 
-                                className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm" 
-                            />
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <Calendar />
-                        {selectedDate && (
-                            <div>
-                                <h3 className="text-sm font-semibold text-gray-300 mb-2">Horários Disponíveis</h3>
-                                {isLoadingSlots ? (
-                                    <div className="flex justify-center py-4"><LoaderIcon className="w-6 h-6 text-gray-400" /></div>
-                                ) : availableTimeSlots.length > 0 ? (
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1 scrollbar-hide">
-                                        {availableTimeSlots.map(t => (
-                                            <button 
-                                                key={t} 
-                                                type="button"
-                                                onClick={() => setSelectedTime(t)}
-                                                className={`p-2 rounded-lg text-sm transition-colors text-center ${selectedTime === t ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
-                                            >
-                                                {t}
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-center text-gray-500 text-sm py-2">Nenhum horário disponível ou agenda cheia.</p>
-                                )}
-                            </div>
-                        )}
-                        <input type="hidden" required value={date} />
-                        <input type="hidden" required value={time} />
-                    </>
-                )}
-
-                <button type="submit" disabled={isSaving || !date || !time} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 text-sm sm:text-base">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="tel" placeholder="Telefone do Cliente (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="email" placeholder="Email do Cliente (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <button type="submit" disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Agendamento'}
                 </button>
             </form>
@@ -1628,7 +1423,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                                         key={time} 
                                                         type="button"
                                                         onClick={() => setSelectedTime(time)}
-                                                        className={`p-4 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
+                                                        className={`p-2 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
                                                     >
                                                         {time}
                                                     </button>
@@ -2540,7 +2335,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
           </div>
         </main>
 
-        <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} businessProfile={businessProfile} />
+        <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
         <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
         <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} onUpgrade={handleUpgrade} />
