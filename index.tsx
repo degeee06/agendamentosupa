@@ -232,7 +232,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
             onClick={onClose}
         >
             <div 
-                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
+                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-4 sm:p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
                 onClick={(e) => e.stopPropagation()}
             >
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
@@ -281,7 +281,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
                     onChange={e => setDate(e.target.value)} 
                     required 
                     className="w-full bg-black/20 border border-gray-600 rounded-lg px-4 py-3 text-base text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 appearance-none block"
-                    style={{ colorScheme: 'dark' }} 
+                    style={{ colorScheme: 'dark', width: '100%' }} 
                 />
                 <input 
                     type="time" 
@@ -289,7 +289,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
                     onChange={e => setTime(e.target.value)} 
                     required 
                     className="w-full bg-black/20 border border-gray-600 rounded-lg px-4 py-3 text-base text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 appearance-none block"
-                    style={{ colorScheme: 'dark' }} 
+                    style={{ colorScheme: 'dark', width: '100%' }} 
                 />
                 <button type="submit" disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Agendamento'}
