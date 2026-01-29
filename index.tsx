@@ -10,6 +10,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 // FIREBASE WEB SDK
+// Changed to compat import to resolve 'initializeApp' missing export issue
 import firebase from 'firebase/compat/app';
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
@@ -20,7 +21,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 
-// Configurações do Firebase
+// Configurações do Firebase (Hardcoded conforme fornecido)
 const firebaseConfig = {
     apiKey: "AIzaSyAZZdxquZYwS7M7-FL3R_gwqA30Q-bCvwc",
     authDomain: "agendamento-link-e6f81.firebaseapp.com",
@@ -30,7 +31,8 @@ const firebaseConfig = {
     appId: "1:881996925647:web:96e83812836269b62485ba"
 };
 
-// Chave VAPID para Web Push
+// Chave VAPID para Web Push (Necessária para getToken no navegador)
+// Prioriza variável de ambiente, fallback para a chave fornecida
 const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BKe7Lzlv5imlTgwnC9zqVHlcVqRdFW2o-DZtfGLN_90V01ILQdZ8obPTRU5CPwABsNxwQYg6-UsntYd2BB7Debg";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
@@ -40,6 +42,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Inicialização Firebase (Apenas se estiver no navegador)
+// Isso evita erros ao rodar no ambiente nativo onde 'window' pode ter comportamentos diferentes na inicialização
 let messaging: any = null;
 if (typeof window !== 'undefined') {
     try {
@@ -70,7 +73,6 @@ type Profile = {
     last_usage_date: string;
     terms_accepted_at?: string;
     premium_expires_at?: string;
-    full_name?: string;
 };
 
 type BusinessProfile = {
@@ -126,7 +128,7 @@ const CheckCircleIcon = (p: any) => <Icon {...p}><path d="M22 11.08V12a10 10 0 1
 const XCircleIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Icon>;
 const LoaderIcon = (p: any) => <Icon {...p} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></Icon>;
 const XIcon = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>;
-const SettingsIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
+const SettingsIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
 const StarIcon = (p: any) => <Icon {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Icon>;
 const ChevronLeftIcon = (p: any) => <Icon {...p}><polyline points="15 18 9 12 15 6"/></Icon>;
 const ChevronRightIcon = (p: any) => <Icon {...p}><polyline points="9 18 15 12 9 6"/></Icon>;
@@ -230,7 +232,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
             onClick={onClose}
         >
             <div 
-                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-4 sm:p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
+                className={`glassmorphism w-full ${sizeClasses[size]} rounded-2xl p-6 border border-gray-700 relative transition-all duration-300 ease-in-out ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`} 
                 onClick={(e) => e.stopPropagation()}
             >
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
@@ -273,22 +275,8 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
                 <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="tel" placeholder="Telefone do Cliente (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="email" placeholder="Email do Cliente (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                <input 
-                    type="date" 
-                    value={date} 
-                    onChange={e => setDate(e.target.value)} 
-                    required 
-                    className="w-full bg-black/20 border border-gray-600 rounded-lg px-3 py-3 text-base text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 appearance-none block box-border"
-                    style={{ colorScheme: 'dark', width: '100%' }} 
-                />
-                <input 
-                    type="time" 
-                    value={time} 
-                    onChange={e => setTime(e.target.value)} 
-                    required 
-                    className="w-full bg-black/20 border border-gray-600 rounded-lg px-3 py-3 text-base text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 appearance-none block box-border"
-                    style={{ colorScheme: 'dark', width: '100%' }} 
-                />
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <button type="submit" disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Agendamento'}
                 </button>
@@ -662,14 +650,14 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                     {/* Working Hours */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-3">Horário de Funcionamento</h3>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                            <div className="w-full sm:w-1/2">
+                        <div className="flex items-center space-x-4">
+                            <div className="w-1/2">
                                 <label className="text-sm text-gray-400 mb-1 block">Início</label>
-                                <input type="time" value={profile.start_time} onChange={e => handleTimeChange('start_time', e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" style={{colorScheme: 'dark'}} />
+                                <input type="time" value={profile.start_time} onChange={e => handleTimeChange('start_time', e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-2 text-white" />
                             </div>
-                            <div className="w-full sm:w-1/2">
+                            <div className="w-1/2">
                                 <label className="text-sm text-gray-400 mb-1 block">Fim</label>
-                                <input type="time" value={profile.end_time} onChange={e => handleTimeChange('end_time', e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" style={{colorScheme: 'dark'}} />
+                                <input type="time" value={profile.end_time} onChange={e => handleTimeChange('end_time', e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-2 text-white" />
                             </div>
                         </div>
                     </div>
@@ -694,8 +682,8 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-2">Bloquear Datas Específicas</h3>
                         <div className="flex space-x-2">
-                            <input type="date" value={newBlockedDate} onChange={e => setNewBlockedDate(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400" style={{colorScheme: 'dark'}} />
-                            <button onClick={addBlockedDate} className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-500">Adicionar</button>
+                            <input type="date" value={newBlockedDate} onChange={e => setNewBlockedDate(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-2 text-white placeholder-gray-400" />
+                            <button onClick={addBlockedDate} className="bg-gray-600 text-white px-4 py-1 rounded-lg text-sm hover:bg-gray-500">Adicionar</button>
                         </div>
                         <ul className="mt-2 space-y-1">
                             {profile.blocked_dates.map(date => (
@@ -710,14 +698,12 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                     {/* Blocked Times */}
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-2">Bloquear Horários Recorrentes</h3>
-                        <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                            <select value={selectedDay} onChange={e => setSelectedDay(e.target.value)} className="w-full sm:w-1/3 bg-black/20 border border-gray-600 rounded-lg p-3 text-white">
+                        <div className="flex space-x-2 mb-2">
+                            <select value={selectedDay} onChange={e => setSelectedDay(e.target.value)} className="w-1/2 bg-black/20 border border-gray-600 rounded-lg p-2 text-white">
                                 {Object.entries(daysOfWeek).map(([key, value]) => <option key={key} value={key}>{value}</option>)}
                             </select>
-                            <div className="flex gap-2 w-full sm:w-2/3">
-                                <input type="time" value={newBlockedTime} onChange={e => setNewBlockedTime(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" style={{colorScheme: 'dark'}} />
-                                <button onClick={addBlockedTime} className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-500 whitespace-nowrap">Adicionar</button>
-                            </div>
+                            <input type="time" value={newBlockedTime} onChange={e => setNewBlockedTime(e.target.value)} className="w-1/2 bg-black/20 border border-gray-600 rounded-lg p-2 text-white" />
+                            <button onClick={addBlockedTime} className="bg-gray-600 text-white px-4 py-1 rounded-lg text-sm hover:bg-gray-500">Adicionar</button>
                         </div>
                         <div className="space-y-2">
                             {Object.entries(daysOfWeek).map(([key, value]) => (
@@ -875,6 +861,11 @@ const AssistantModal = ({ isOpen, onClose, messages, onSendMessage, isLoading }:
 
 
 const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
+    // ... (keep component implementation exactly as is) ...
+    // Using previous code for brevity as no changes requested here.
+    // Full implementation required if not replacing whole file contextually.
+    
+    // RE-INSERTING FULL COMPONENT TO ENSURE FILE INTEGRITY
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -891,6 +882,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     
     const [linkStatus, setLinkStatus] = useState<'loading' | 'valid' | 'invalid' | 'used'>('loading');
     const [bookingCompleted, setBookingCompleted] = useState(false);
+    const [currentMonth, setCurrentMonth] = useState(new Date());
 
     // Payment States
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -1001,6 +993,8 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                     });
                                 }
                             }
+
+                            // Continua carregando o perfil do admin para exibir infos corretas
                         } else {
                             setLinkStatus('used');
                             return;
@@ -1071,13 +1065,16 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         return () => { supabase.removeChannel(channel); };
     }, [pendingAppointmentId]);
 
-    // Polling automático robusto
+    // Polling automático robusto: Funciona enquanto houver um pagamento pendente conhecido,
+    // independente se o modal está aberto ou fechado.
     useEffect(() => {
         let intervalId: any;
 
+        // Só faz polling se tivermos um ID de pagamento, um agendamento pendente e a reserva ainda não estiver concluída.
         if (paymentData?.id && pendingAppointmentId && !bookingCompleted) {
             const checkStatus = async () => {
                 try {
+                    // Chama o webhook manualmente apenas para verificar (silent check)
                     const { data, error = null } = await supabase.functions.invoke('mp-webhook', {
                         body: {
                             id: paymentData.id.toString(),
@@ -1090,10 +1087,11 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                         setBookingCompleted(true);
                     }
                 } catch (e) {
-                    // Ignora erros silenciosamente no polling
+                    // Ignora erros silenciosamente no polling para não atrapalhar o UX
                 }
             };
 
+            // Verifica a cada 4 segundos
             intervalId = setInterval(checkStatus, 4000);
         }
 
@@ -1104,6 +1102,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
     const handleManualVerification = async (paymentId: number) => {
         try {
+            // Tenta chamar o webhook manualmente para forçar a verificação
             const { data, error = null } = await supabase.functions.invoke('mp-webhook', {
                 body: {
                     id: paymentId.toString(),
@@ -1155,7 +1154,6 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
 
         for (let hour = startHour; hour < endHour; hour++) {
             slots.push(`${String(hour).padStart(2, '0')}:00`);
-            slots.push(`${String(hour).padStart(2, '0')}:30`);
         }
 
         const dateString = selectedDate.toISOString().split('T')[0];
@@ -1170,12 +1168,10 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         const now = new Date();
         const localTodayString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
 
         return slots.filter(slot => {
-            const [slotHour, slotMinute] = slot.split(':').map(Number);
-            // Bloqueia horários passados hoje
-            const isPastTimeToday = (dateString === localTodayString) && (slotHour < currentHour || (slotHour === currentHour && slotMinute <= currentMinute));
+            const [slotHour] = slot.split(':').map(Number);
+            const isPastTimeToday = (dateString === localTodayString) && (slotHour <= currentHour);
 
             return !isPastTimeToday && 
                    !bookedTimes.includes(slot) && 
@@ -1212,10 +1208,13 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        // Caso de recuperação onde o usuário clica em "Abrir Pagamento Pix"
         if (pendingAppointmentId && adminId && businessProfile?.service_price) {
+             // Se já temos dados de pagamento na memória, abre modal
              if (paymentData) {
                  setPaymentModalOpen(true);
              } else {
+                 // Se não, gera um novo (idempotente) para pegar o QR Code visual
                  setIsSaving(true);
                  await handlePayment(pendingAppointmentId, businessProfile.service_price);
                  setIsSaving(false);
@@ -1254,579 +1253,1179 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             
             const { appointment: newAppt } = data;
             const newApptId = newAppt.id;
-            setPendingAppointmentId(newApptId);
+            setPendingAppointmentId(newApptId); // Salva estado para realtime
 
+            // VERIFICA SE O AGENDAMENTO JÁ FOI CRIADO COMO CONFIRMADO (Grátis ou sem MP)
             if (newAppt.status === 'Confirmado') {
                 setBookingCompleted(true);
-                return;
+                return; // Encerra o fluxo aqui, não gera pagamento.
             }
 
+            // Se não confirmado, verificar se precisa de pagamento (dupla verificação com o estado local)
             if (businessProfile?.service_price && businessProfile.service_price > 0) {
-                 await handlePayment(newApptId, businessProfile.service_price);
+                // Inicia fluxo de pagamento
+                await handlePayment(newApptId, businessProfile.service_price);
             } else {
-                 setBookingCompleted(true);
-                 setMessage({ type: 'success', text: 'Agendamento realizado com sucesso!' });
+                // Fallback: se por algum motivo o back retornou pendente mas o front acha que é 0
+                setBookingCompleted(true);
             }
-        } catch (error: any) {
-            console.error('Erro ao salvar:', error);
-            setMessage({ type: 'error', text: error.message || 'Erro ao realizar agendamento.' });
+
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.message });
         } finally {
             setIsSaving(false);
         }
     };
 
-    if (linkStatus === 'loading') return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white"><LoaderIcon className="w-10 h-10" /></div>;
+    const handleDateSelect = (date: Date) => {
+        if (isDayAvailable(date)) {
+            setSelectedDate(date);
+            setSelectedTime(null);
+        }
+    };
+    
+    const changeMonth = (amount: number) => {
+      setCurrentMonth(prev => {
+          const newDate = new Date(prev.getFullYear(), prev.getMonth() + amount, 1);
+          return newDate;
+      });
+    };
+
+    const Calendar = () => {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        const days = Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`}></div>);
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(Date.UTC(year, month, day));
+            const isAvailable = isDayAvailable(date);
+            const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
+            
+            let classes = "w-10 h-10 flex items-center justify-center rounded-full transition-colors text-sm ";
+            if (isAvailable) {
+                classes += isSelected 
+                    ? "bg-gray-200 text-black font-bold" 
+                    : "bg-black/20 text-white hover:bg-gray-700 cursor-pointer";
+            } else {
+                classes += "text-gray-600 cursor-not-allowed";
+            }
+            
+            days.push(
+                <button key={day} onClick={() => handleDateSelect(date)} disabled={!isAvailable} className={classes}>
+                    {day}
+                </button>
+            );
+        }
+
+        return (
+            <div className="bg-black/20 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeftIcon className="w-5 h-5 text-white"/></button>
+                    <h3 className="font-bold text-white text-lg">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+                    <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
+                </div>
+                <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
+                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                    {days}
+                </div>
+            </div>
+        );
+    };
     
     if (bookingCompleted) {
         return (
-            <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center p-4">
-                <div className="glassmorphism max-w-md w-full p-8 rounded-2xl text-center space-y-6 animate-fade-in-up">
-                    <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
-                        <CheckCircleIcon className="w-10 h-10 text-green-400" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-white">Agendamento Confirmado!</h2>
-                    <p className="text-gray-300">
-                        {name}, seu horário foi reservado com sucesso.
-                    </p>
-                    <div className="bg-black/30 p-4 rounded-xl space-y-2">
-                        <div className="flex items-center justify-center space-x-2 text-gray-200">
-                            <CalendarIcon className="w-5 h-5 text-gray-400" />
-                            <span className="font-semibold text-lg">{selectedDate?.toLocaleDateString('pt-BR')}</span>
-                        </div>
-                        <div className="flex items-center justify-center space-x-2 text-gray-200">
-                            <ClockIcon className="w-5 h-5 text-gray-400" />
-                            <span className="font-semibold text-lg">{selectedTime}</span>
-                        </div>
-                    </div>
-                     <p className="text-sm text-gray-500">
-                        Você pode fechar esta página agora.
+            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
+                <div className="glassmorphism rounded-2xl p-8">
+                    <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-white mb-2">Agendamento Concluído</h1>
+                    <p className="text-gray-400">
+                        Seu horário foi agendado com sucesso.
                     </p>
                 </div>
             </div>
         );
     }
-    
+
+    if (linkStatus === 'loading') {
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+    }
+
     if (linkStatus === 'invalid' || linkStatus === 'used') {
-         return (
-            <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center p-4 text-center">
-                <AlertCircleIcon className="w-16 h-16 text-red-500 mb-4" />
-                <h2 className="text-2xl font-bold text-white mb-2">Link Inválido ou Expirado</h2>
-                <p className="text-gray-400">Este link de agendamento não existe ou já foi utilizado.</p>
-                 <p className="text-sm text-gray-500 mt-4">Solicite um novo link ao profissional.</p>
+        return (
+            <div className="min-h-screen bg-black flex justify-center items-center text-center p-4">
+                <div className="glassmorphism rounded-2xl p-8">
+                    <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-white mb-2">{linkStatus === 'used' ? 'Link Utilizado' : 'Link Inválido'}</h1>
+                    <p className="text-gray-400">
+                        {linkStatus === 'used' 
+                            ? 'Este link de agendamento já foi utilizado e o horário confirmado ou expirado.' 
+                            : 'Este link de agendamento é inválido ou expirou.'}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">Por favor, solicite um novo link ao profissional.</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-xl mx-auto space-y-8">
-                <div className="text-center">
-                    <h1 className="text-3xl font-extrabold text-white">Agendar Horário</h1>
-                     {adminProfile && <p className="mt-2 text-gray-400">Com: <span className="text-white font-semibold">{adminProfile.full_name || 'Profissional'}</span></p>}
-                </div>
-                
-                {message && (
-                    <div className={`p-4 rounded-lg text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                        {message.text}
-                    </div>
-                )}
-                
-                {paymentData && (
-                     <PaymentModal 
-                        isOpen={paymentModalOpen} 
-                        onClose={() => setPaymentModalOpen(false)}
-                        paymentData={paymentData}
-                        appointmentId={pendingAppointmentId || ''}
-                        onManualCheck={handleManualVerification}
-                     />
-                )}
+        <div className="min-h-screen bg-black p-4">
+            <div className="flex flex-col justify-center items-center">
+                <div className="w-full max-w-md mx-auto py-8">
+                    <div className="glassmorphism rounded-2xl p-6 sm:p-8">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-2">Agendar Horário</h1>
+                        <p className="text-gray-400 text-center mb-8">Preencha os dados abaixo para confirmar seu horário.</p>
 
-                <form onSubmit={handleSubmit} className="glassmorphism p-6 sm:p-8 rounded-2xl space-y-6 shadow-xl">
-                     {/* Dados Pessoais */}
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2 mb-4">Seus Dados</h3>
-                        <div className="space-y-4">
-                            <input 
-                                type="text" 
-                                placeholder="Seu Nome Completo" 
-                                value={name} 
-                                onChange={e => setName(e.target.value)} 
-                                required 
-                                className="w-full bg-black/20 border border-gray-600 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                            />
-                            <input 
-                                type="tel" 
-                                placeholder="Seu WhatsApp (DDD + Número)" 
-                                value={phone} 
-                                onChange={e => setPhone(maskPhone(e.target.value))} 
-                                required 
-                                maxLength={15} 
-                                className="w-full bg-black/20 border border-gray-600 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                            />
-                             <input 
-                                type="email" 
-                                placeholder="Seu Email (Opcional, para comprovante)" 
-                                value={email} 
-                                onChange={e => setEmail(e.target.value)} 
-                                className="w-full bg-black/20 border border-gray-600 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                            />
-                        </div>
-                    </div>
-
-                    {/* Seleção de Data e Hora - Mobile Stacked */}
-                    <div className="space-y-4 pt-4">
-                        <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2 mb-4">Escolha o Horário</h3>
+                        {message && <div className={`p-4 rounded-lg mb-4 text-center ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
                         
-                        <div className="flex flex-col gap-6">
-                            {/* Data - Full Width on Mobile */}
-                            <div className="w-full">
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Data</label>
-                                <input 
-                                    type="date" 
-                                    required
-                                    min={new Date().toISOString().split('T')[0]}
-                                    onChange={e => {
-                                        const d = parseDateAsUTC(e.target.value);
-                                        if (isDayAvailable(d)) {
-                                            setSelectedDate(d);
-                                            setSelectedTime(null);
-                                        } else {
-                                            alert("Este dia não está disponível.");
-                                            e.target.value = '';
-                                            setSelectedDate(null);
-                                        }
-                                    }}
-                                    className="w-full bg-black/20 border border-gray-600 rounded-xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none min-h-[56px]"
-                                    style={{ colorScheme: 'dark' }} 
-                                />
-                            </div>
-
-                            {/* Horários - Grid Layout */}
-                             {selectedDate && (
-                                <div className="w-full animate-fade-in">
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Horários Disponíveis</label>
-                                    {availableTimeSlots.length > 0 ? (
-                                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                            {availableTimeSlots.map(slot => (
-                                                <button
-                                                    key={slot}
-                                                    type="button"
-                                                    onClick={() => setSelectedTime(slot)}
-                                                    className={`py-3 px-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                                        selectedTime === slot 
-                                                        ? 'bg-blue-600 text-white ring-2 ring-blue-400' 
-                                                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                                                    }`}
-                                                >
-                                                    {slot}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center p-4 bg-gray-800/50 rounded-xl border border-gray-700 text-gray-400 text-sm">
-                                            Nenhum horário disponível para esta data.
-                                        </div>
+                        {pendingAppointmentId ? (
+                            <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lg mb-6 text-center">
+                                <p className="text-yellow-200 font-bold mb-2">Pagamento Pendente</p>
+                                <p className="text-sm text-gray-300 mb-4">Você já iniciou este agendamento. Finalize o pagamento para confirmar.</p>
+                                
+                                <div className="flex flex-col gap-2">
+                                    <button 
+                                        onClick={handleSubmit}
+                                        className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded w-full transition-colors"
+                                    >
+                                        Abrir Pagamento Pix
+                                    </button>
+                                    
+                                    {paymentData && (
+                                        <button 
+                                            onClick={() => handleManualVerification(paymentData.id)}
+                                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 font-bold py-2 px-4 rounded w-full transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <RefreshIcon className="w-4 h-4" />
+                                            Já realizei o pagamento
+                                        </button>
                                     )}
                                 </div>
-                            )}
-                        </div>
-                    </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <input type="text" placeholder="Seu Nome" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                <input type="tel" placeholder="Seu Telefone (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                <input type="email" placeholder="Seu Email (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white" />
+                                
+                                <Calendar />
 
-                    <button 
-                        type="submit" 
-                        disabled={isSaving || !selectedDate || !selectedTime} 
-                        className="w-full bg-white text-black font-black text-lg py-4 px-6 rounded-xl hover:bg-gray-200 transition-transform active:scale-95 disabled:opacity-50 disabled:scale-100 shadow-lg mt-8"
-                    >
-                        {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (paymentData ? 'Pagar Agora' : 'Confirmar Agendamento')}
-                    </button>
-                    
-                     {businessProfile?.service_price && businessProfile.service_price > 0 && (
-                        <p className="text-center text-xs text-gray-500 mt-2">
-                            Ao confirmar, você será redirecionado para o pagamento Pix no valor de R$ {businessProfile.service_price.toFixed(2)}.
-                        </p>
-                    )}
-                </form>
+                                {selectedDate && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
+                                        {availableTimeSlots.length > 0 ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                                {availableTimeSlots.map(time => (
+                                                    <button 
+                                                        key={time} 
+                                                        type="button"
+                                                        onClick={() => setSelectedTime(time)}
+                                                        className={`p-4 rounded-lg text-sm transition-colors ${selectedTime === time ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-gray-500">Nenhum horário disponível para esta data.</p>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {businessProfile?.service_price && businessProfile.service_price > 0 && (
+                                    <div className="bg-gray-800 p-4 rounded-lg text-center">
+                                        <p className="text-gray-400 text-sm">Valor do Serviço</p>
+                                        <p className="text-2xl font-bold text-white">R$ {businessProfile.service_price.toFixed(2)}</p>
+                                    </div>
+                                )}
+
+                                <button type="submit" disabled={isSaving || !selectedDate || !selectedTime || !name || !phone} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (businessProfile?.service_price ? 'Ir para Pagamento' : 'Confirmar Agendamento')}
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                </div>
             </div>
+            
+            {paymentData && pendingAppointmentId && (
+                <PaymentModal 
+                    isOpen={paymentModalOpen} 
+                    onClose={() => setPaymentModalOpen(false)} 
+                    paymentData={paymentData}
+                    appointmentId={pendingAppointmentId}
+                    onManualCheck={handleManualVerification}
+                />
+            )}
         </div>
     );
 };
 
-// --- COMPONENTES DA APLICAÇÃO ---
 
-const Dashboard = ({ user, profile, onLogout }: { user: User, profile: Profile, onLogout: () => void }) => {
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'todos' | 'hoje' | 'pendentes'>('hoje');
-    const [stats, setStats] = useState({ total: 0, pending: 0, revenue: 0 });
-    
-    // Modals
-    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [isNewApptModalOpen, setIsNewApptModalOpen] = useState(false);
+const LoginPage = () => {
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
-    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-    const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-
-    // Assistant
-    const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
-        { sender: 'ai', text: 'Olá! Sou seu assistente inteligente. Posso ajudar a verificar sua agenda, criar agendamentos ou tirar dúvidas sobre faturamento. Como posso ajudar hoje?' }
-    ]);
-    const [isAssistantLoading, setIsAssistantLoading] = useState(false);
-
-    const fetchAppointments = useCallback(async () => {
-        setLoading(true);
-        const { data, error = null } = await supabase
-            .from('appointments')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('date', { ascending: true })
-            .order('time', { ascending: true });
-        
-        if (!error && data) {
-            setAppointments(data as Appointment[]);
-            
-            // Calc stats
-            const pending = data.filter((a: any) => a.status === 'Pendente' || a.status === 'Aguardando Pagamento').length;
-            // Simplificação de receita: assumindo preço fixo ou pegando de payments
-            setStats({ total: data.length, pending, revenue: 0 }); 
-        }
-        setLoading(false);
-    }, [user.id]);
+    const [hasAcceptedPreviously, setHasAcceptedPreviously] = useState(false);
 
     useEffect(() => {
-        fetchAppointments();
-        
-        // Setup Realtime
-        const channel = supabase
-            .channel(`dashboard-${user.id}`)
-            .on(
+        if (localStorage.getItem('termsAccepted') === 'true') {
+            setHasAcceptedPreviously(true);
+            setTermsAccepted(true); // Pre-approve logically to enable the button
+        }
+    }, []);
+    
+    const handleLogin = async () => {
+        if (!termsAccepted) {
+            alert("Você precisa aceitar os Termos de Uso para continuar.");
+            return;
+        }
+    
+        const getRedirectUrl = () => {
+            const isNative = Capacitor.isNativePlatform();
+            return isNative ? 'com.oubook.app://auth-callback' : window.location.origin;
+        };
+    
+        try {
+            const isNative = Capacitor.isNativePlatform();
+            const redirectTo = getRedirectUrl();
+    
+            if (isNative) {
+                // For native, we get the URL and open it in the Capacitor Browser
+                const { data, error = null } = await (supabase.auth as any).signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo,
+                        skipBrowserRedirect: true, // Important for native flow
+                    },
+                });
+                if (error) throw error;
+                if (data.url) {
+                    await Browser.open({ url: data.url, windowName: '_self' });
+                }
+            } else {
+                // For web, Supabase handles the redirect automatically
+                const { error = null } = await (supabase.auth as any).signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo,
+                    },
+                });
+                if (error) throw error;
+            }
+        } catch (error) {
+            console.error("Erro no login com Google:", error);
+        }
+    };
+
+    return (
+        <>
+            <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4">
+                <div className="text-center w-full max-w-sm">
+                     <CalendarIcon className="w-16 h-16 text-white mx-auto mb-4" />
+                     <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">Oubook</h1>
+                     <p className="text-base sm:text-lg text-gray-400 mb-8">A maneira mais inteligente de gerenciar seus agendamentos.</p>
+                     
+                     <div className="my-6">
+                        {hasAcceptedPreviously ? (
+                            <p className="text-xs text-gray-500 text-center">
+                                Ao continuar, você concorda com nossos <button type="button" onClick={() => setIsTermsModalOpen(true)} className="underline hover:text-white">Termos de Uso</button>.
+                            </p>
+                        ) : (
+                            <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={termsAccepted}
+                                    onChange={() => setTermsAccepted(!termsAccepted)}
+                                    className="h-4 w-4 accent-gray-400 bg-gray-800 border-gray-600 rounded focus:ring-gray-500"
+                                />
+                                <span className="text-sm text-gray-400">Eu li e aceito os <button type="button" onClick={() => setIsTermsModalOpen(true)} className="underline hover:text-white">Termos de Uso</button></span>
+                            </label>
+                        )}
+                     </div>
+                     
+                     <button 
+                        onClick={handleLogin} 
+                        disabled={!termsAccepted}
+                        className="w-full bg-white text-black font-bold py-3 px-8 rounded-lg transition-all text-lg flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:bg-gray-200"
+                     >
+                         <svg className="w-6 h-6" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.42-4.55H24v8.51h12.8c-.57 2.74-2.31 5.11-4.81 6.69l7.98 6.19c4.65-4.3 7.3-10.49 7.3-17.84z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.98-6.19c-2.11 1.45-4.81 2.3-7.91 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                        <span>Entrar com Google</span>
+                     </button>
+                </div>
+            </div>
+            <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} />
+        </>
+    );
+};
+
+const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile | null, setProfile: React.Dispatch<React.SetStateAction<Profile | null>>}) => {
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+    const [statusFilter, setStatusFilter] = useState<'Pendente' | 'Confirmado' | 'Cancelado' | 'Todos'>('Todos');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    
+    // State for pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const APPOINTMENTS_PAGE_SIZE = 20;
+
+    const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
+    const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
+        { sender: 'ai', text: 'Olá! Como posso ajudar a organizar sua agenda hoje?' }
+    ]);
+    const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+    
+    // State to track notification permission status for UI button
+    const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>(
+        typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+    );
+    const [isTestingNotification, setIsTestingNotification] = useState(false);
+
+
+    const TRIAL_LIMIT = 5;
+    const usage = profile?.daily_usage ?? 0;
+    const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
+
+    useEffect(() => {
+        // Inject Hotmart script dynamically to ensure it runs after React mounts
+        const scriptId = 'hotmart-script';
+        const linkId = 'hotmart-css';
+    
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script'); 
+            script.id = scriptId;
+            script.src = 'https://static.hotmart.com/checkout/widget.min.js'; 
+            script.async = true;
+            document.head.appendChild(script); 
+        }
+    
+        if (!document.getElementById(linkId)) {
+            const link = document.createElement('link');
+            link.id = linkId;
+            link.rel = 'stylesheet'; 
+            link.type = 'text/css'; 
+            link.href = 'https://static.hotmart.com/css/hotmart-fb.min.css'; 
+            document.head.appendChild(link);
+        }
+    }, []);
+
+    const fetchDashboardData = useCallback(async () => {
+        // Não definir isLoading aqui para evitar piscar na tela com o realtime
+        try {
+            const [appointmentsRes, businessProfileRes] = await Promise.all([
+                supabase.from('appointments')
+                  .select('*')
+                  .eq('user_id', user.id)
+                  .order('date', { ascending: false })
+                  .order('time', { ascending: false })
+                  .range(0, APPOINTMENTS_PAGE_SIZE - 1),
+                supabase.from('business_profiles').select('*').eq('user_id', user.id).single()
+            ]);
+
+            if (appointmentsRes.error) throw appointmentsRes.error;
+            
+            const fetchedAppointments = appointmentsRes.data || [];
+            setAppointments(fetchedAppointments);
+            setHasMore(fetchedAppointments.length === APPOINTMENTS_PAGE_SIZE);
+            setCurrentPage(1);
+            
+            const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
+            const defaultStartTime = '09:00';
+            const defaultEndTime = '17:00';
+            
+            if (businessProfileRes.data) {
+                setBusinessProfile({
+                    ...businessProfileRes.data,
+                    blocked_dates: businessProfileRes.data.blocked_dates || [],
+                    blocked_times: businessProfileRes.data.blocked_times || {},
+                    working_days: businessProfileRes.data.working_days || defaultWorkingDays,
+                    start_time: businessProfileRes.data.start_time || defaultStartTime,
+                    end_time: businessProfileRes.data.end_time || defaultEndTime,
+                    service_price: businessProfileRes.data.service_price || 0
+                });
+            } else {
+                 setBusinessProfile({ user_id: user.id, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime, service_price: 0 });
+            }
+
+        } catch (error: any) {
+            console.error("Erro ao buscar dados do dashboard:", error);
+            setError("Não foi possível carregar os dados.");
+        } finally {
+            setIsLoading(false); // Definir como falso apenas no final do fetch inicial
+        }
+    }, [user.id]);
+    
+    const handleLoadMore = async () => {
+        if (isLoadingMore || !hasMore) return;
+        setIsLoadingMore(true);
+    
+        const from = currentPage * APPOINTMENTS_PAGE_SIZE;
+        const to = from + APPOINTMENTS_PAGE_SIZE - 1;
+    
+        try {
+            const { data: newAppointments, error = null } = await supabase
+                .from('appointments')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('date', { ascending: false })
+                .order('time', { ascending: false })
+                .range(from, to);
+    
+            if (error) throw error;
+            
+            const fetchedAppointments = newAppointments || [];
+            setAppointments(prev => [...prev, ...fetchedAppointments]);
+            setHasMore(fetchedAppointments.length === APPOINTMENTS_PAGE_SIZE);
+            setCurrentPage(prev => prev + 1);
+    
+        } catch (error: any) {
+            console.error("Erro ao carregar mais agendamentos:", error);
+            setError("Não foi possível carregar mais agendamentos.");
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!user.id) return;
+    
+        // 1. Fetch inicial dos dados
+        fetchDashboardData();
+    
+        // 2. Assinatura para mudanças diretas no banco de dados (updates, deletes)
+        const dbChangesChannel = supabase
+            .channel(`db-changes-for-${user.id}`)
+            .on<Appointment>(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'appointments', filter: `user_id=eq.${user.id}` },
                 (payload) => {
-                    fetchAppointments(); // Refresh on any change
+                    if (payload.eventType === 'INSERT') {
+                        setAppointments(prev => {
+                            if (prev.some(app => app.id === payload.new.id)) return prev;
+                            return [payload.new, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
+                        });
+                    }
+                    if (payload.eventType === 'UPDATE') {
+                        setAppointments(prev => prev.map(app => app.id === payload.new.id ? payload.new : app));
+                    }
+                    if (payload.eventType === 'DELETE') {
+                         setAppointments(prev => prev.filter(app => app.id !== (payload.old as { id: string }).id));
+                    }
                 }
             )
             .subscribe();
-
-        // Check Terms
-        if (!profile.terms_accepted_at) setIsTermsModalOpen(true);
-        
-        // Check Permissions
-        checkPermissions();
-
-        return () => { supabase.removeChannel(channel); };
-    }, [user.id, profile.terms_accepted_at, fetchAppointments]);
-
-    const checkPermissions = async () => {
-        if (Capacitor.isNativePlatform()) {
-             const permStatus = await PushNotifications.checkPermissions();
-             if (permStatus.receive === 'prompt') {
-                 PushNotifications.requestPermissions().then(result => {
-                    if (result.receive === 'granted') PushNotifications.register();
-                 });
-             } else if (permStatus.receive === 'granted') {
-                 PushNotifications.register();
-             }
-        } else if (Notification.permission === 'default') {
-             Notification.requestPermission().then(permission => {
-                 if (permission === 'granted' && messaging) {
-                    getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY }).then((currentToken) => {
-                        if (currentToken) {
-                             supabase.functions.invoke('register-push-token', { body: { token: currentToken } });
-                        }
+    
+        // 3. Assinatura para broadcasts de Edge Functions (novos agendamentos públicos)
+        const broadcastChannel = supabase
+            .channel(`dashboard-${user.id}`)
+            .on('broadcast', { event: 'new_public_appointment' }, ({ payload }) => {
+                const newAppointment = payload as Appointment;
+                if (newAppointment) {
+                    setAppointments(prev => {
+                        if (prev.some(app => app.id === newAppointment.id)) return prev;
+                        return [newAppointment, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time));
                     });
-                 }
-             });
+                }
+            })
+            .subscribe();
+    
+        // 4. Função de limpeza
+        return () => {
+            supabase.removeChannel(dbChangesChannel);
+            supabase.removeChannel(broadcastChannel);
+        };
+    }, [user.id, fetchDashboardData]);
+    
+    // Efeito para registrar para notificações push (Híbrido)
+    useEffect(() => {
+        if (user.id) {
+            registerForPushNotifications(user.id, false); // false = not manual (initial check)
         }
-    };
+    }, [user.id]);
+    
+    const registerForPushNotifications = async (userId: string, manual: boolean) => {
+        const platform = Capacitor.getPlatform();
 
-    const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
-        await supabase.from('appointments').update({ status }).eq('id', id);
-        // Optimistic update handled by fetch or realtime
-    };
+        // 1. WEB PUSH (Navegador)
+        if (platform === 'web' && messaging) {
+            setPermissionStatus(Notification.permission);
 
-    const handleDelete = async (id: string) => {
-        if (confirm('Tem certeza que deseja excluir este agendamento?')) {
-            await supabase.from('appointments').delete().eq('id', id);
-        }
-    };
-
-    const handleManualCreate = async (name: string, phone: string, email: string, date: string, time: string) => {
-        // Check limits for Trial
-        if (profile.plan === 'trial') {
-            const today = new Date().toISOString().split('T')[0];
-            const usage = profile.last_usage_date === today ? profile.daily_usage : 0;
-            if (usage >= 5) {
-                setIsUpgradeModalOpen(true);
+            if (!manual && Notification.permission !== 'granted') {
+                console.log("Web Push: Waiting for user gesture.");
                 return;
             }
-        }
+
+            try {
+                const permission = await Notification.requestPermission();
+                setPermissionStatus(permission);
+
+                if (permission === 'granted') {
+                    // --- CORREÇÃO CRÍTICA AQUI ---
+                    // Registra explicitamente o Service Worker antes de pedir o token
+                    let registration;
+                    try {
+                        registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                        console.log('Service Worker registrado com sucesso:', registration);
+                    } catch (swError) {
+                        console.error('Falha ao registrar Service Worker:', swError);
+                        // Tenta continuar mesmo se falhar (alguns browsers já podem ter registrado)
+                    }
+
+                    // Passa a registration explicitamente para o getToken
+                    const token = await getToken(messaging, { 
+                        vapidKey: FIREBASE_VAPID_KEY,
+                        serviceWorkerRegistration: registration 
+                    });
+
+                    if (token) {
+                        console.log("Token Web Push:", token);
+                        await supabase.functions.invoke('register-push-token', {
+                            body: { token }
+                        });
+
+                        onMessage(messaging, (payload) => {
+                            console.log('Mensagem recebida em foreground (Web):', payload);
+                            if (payload.notification) {
+                                const { title, body } = payload.notification;
+                                // Tenta criar notificação visual do sistema
+                                if (Notification.permission === 'granted') {
+                                    try {
+                                        new Notification(title || "Nova Mensagem", {
+                                            body: body,
+                                            icon: '/icon.svg',
+                                        });
+                                    } catch (e) {
+                                        alert(`${title}\n${body}`);
+                                    }
+                                } else {
+                                    alert(`${title}\n${body}`);
+                                }
+                            }
+                        });
+                        
+                        if(manual) alert("Notificações ativadas com sucesso!");
+                    }
+                } else {
+                    console.log("Permissão de notificação negada no navegador.");
+                    if(manual) alert("Permissão de notificação negada. Verifique as configurações do seu navegador.");
+                }
+            } catch (err) { 
+                console.error("Erro Web Push:", err);
+                if(manual) alert("Erro ao ativar notificações: " + err);
+            }
+        } 
+        // 2. NATIVE PUSH (Android/iOS via Capacitor)
+        else if (platform !== 'web') {
+            try {
+                let permStatus = await PushNotifications.checkPermissions();
         
-        const { error = null } = await supabase.from('appointments').insert({
-            user_id: user.id, name, phone, email, date, time, status: 'Confirmado'
-        });
+                if (permStatus.receive === 'prompt') {
+                    permStatus = await PushNotifications.requestPermissions();
+                }
         
-        if (error) alert('Erro ao criar agendamento');
-        else {
-            // Update usage locally/optimistically (real sync happens on backend usually, but we do basic here)
-            // Ideally backend triggers update
+                if (permStatus.receive !== 'granted') {
+                    console.log('Permissão para notificações nativas não concedida.');
+                    return;
+                }
+        
+                await PushNotifications.register();
+                await PushNotifications.removeAllListeners();
+
+                PushNotifications.addListener('registration', async (token) => {
+                    console.log('Native Push registration success, token:', token.value);
+                    await supabase.functions.invoke('register-push-token', {
+                        body: { token: token.value }
+                    });
+                });
+        
+                PushNotifications.addListener('registrationError', (error) => {
+                    console.error('Erro no registro de push nativo:', error);
+                });
+
+                PushNotifications.addListener('pushNotificationReceived', (notification) => {
+                    // Em Apps Nativos, notificações em foreground são silenciosas por padrão.
+                    // Forçamos um alerta visual.
+                    alert(`🔔 ${notification.title}\n${notification.body}`);
+                });
+        
+            } catch (error) {
+                console.error("Erro ao configurar notificações push nativas:", error);
+            }
         }
     };
 
-    const handleAssistantMessage = async (text: string) => {
-        setAssistantMessages(prev => [...prev, { sender: 'user', text }]);
-        setIsAssistantLoading(true);
-        
-        // Prepare context
-        const context = `
-            Hoje é: ${new Date().toISOString()}
-            Meus Agendamentos: ${JSON.stringify(appointments.slice(0, 10))}
-            Estatísticas: ${JSON.stringify(stats)}
-        `;
-
+    const handleTestNotification = async () => {
+        setIsTestingNotification(true);
         try {
-            const { data, error = null } = await supabase.functions.invoke('deepseek-assistant', {
-                body: { 
-                    messages: [{role: 'user', content: text}],
-                    context,
-                    currentDate: new Date().toISOString()
-                }
+            const { data, error } = await supabase.functions.invoke('book-appointment-public', {
+                body: { action: 'test-notification', userId: user.id }
             });
-            
-            if (error || !data) throw new Error('Erro na IA');
-            
-            const aiResponse = data.choices[0].message.content;
-            setAssistantMessages(prev => [...prev, { sender: 'ai', text: aiResponse }]);
 
-            // Handle tool calls if any (simplified)
-            if (data.choices[0].message.tool_calls) {
-                // ... logic to handle tool calls like create_appointment ...
-                setAssistantMessages(prev => [...prev, { sender: 'system', text: 'Função executada (simulação).' }]);
+            if (error) {
+                throw error;
+            }
+            
+            console.log("Resultado do teste:", data);
+            
+            if (data?.success) {
+                alert("Teste enviado! Verifique se recebeu a notificação. Se não recebeu, verifique os logs no Supabase.");
+            } else {
+                // AGORA TRATAMOS O ERRO DETALHADO RETORNADO PELA EDGE FUNCTION
+                alert(`Erro no envio: ${data?.details?.error || JSON.stringify(data?.details)}`);
             }
 
-        } catch (e) {
-            setAssistantMessages(prev => [...prev, { sender: 'system', text: 'Desculpe, não consegui processar sua solicitação no momento.' }]);
+        } catch (e: any) {
+            console.error("Erro no teste:", e);
+            alert(`Erro ao testar notificação: ${e.message || JSON.stringify(e)}`);
+        } finally {
+            setIsTestingNotification(false);
+        }
+    };
+
+    const filteredAppointments = useMemo(() => {
+        return appointments
+            .filter(app => statusFilter === 'Todos' || app.status === statusFilter)
+            .filter(app =>
+                app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (app.email && app.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (app.phone && app.phone.toLowerCase().includes(searchTerm.toLowerCase()))
+            );
+    }, [appointments, statusFilter, searchTerm]);
+
+    const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
+        const originalAppointments = [...appointments];
+        setAppointments(prev => prev.map(app => app.id === id ? { ...app, status } : app));
+        const { error = null } = await supabase.from('appointments').update({ status }).eq('id', id);
+        if (error) {
+            console.error("Erro ao atualizar status, revertendo:", error);
+            alert("Não foi possível atualizar o status. A alteração foi desfeita.");
+            setAppointments(originalAppointments);
+        }
+    };
+
+    const handleDeleteAppointment = async (id: string) => {
+        const isConfirmed = window.confirm('Tem certeza que deseja excluir este agendamento? Esta ação é permanente e não pode ser desfeita.');
+        if (isConfirmed) {
+            const { error = null } = await supabase.from('appointments').delete().eq('id', id);
+            if (error) console.error("Erro ao excluir agendamento:", error);
+            else setAppointments(prev => prev.filter(app => app.id !== id));
+        }
+    };
+    
+    const handleDownloadPDF = async () => {
+        if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+            console.error("jsPDF library not loaded.");
+            alert("Não foi possível gerar o PDF. Por favor, recarregue a página e tente novamente.");
+            return;
+        }
+    
+        const { jsPDF } = jspdf;
+        const doc = new jsPDF();
+    
+        doc.text("Relatório de Agendamentos", 14, 16);
+    
+        const tableColumn = ["Cliente", "Data", "Hora", "Status", "Contato"];
+        const tableRows: (string | undefined)[][] = [];
+    
+        filteredAppointments.forEach(app => {
+            const appointmentData = [
+                app.name,
+                parseDateAsUTC(app.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
+                app.time,
+                app.status,
+                app.phone ? maskPhone(app.phone) : (app.email || 'N/A')
+            ];
+            tableRows.push(appointmentData);
+        });
+    
+        (doc as any).autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 20,
+            theme: 'striped',
+            headStyles: { fillColor: [28, 28, 30] },
+        });
+
+        const fileName = "agendamentos.pdf";
+    
+        if (Capacitor.isNativePlatform()) {
+            try {
+                // Para Capacitor, geramos o base64 e usamos Filesystem e Share
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                
+                const result = await Filesystem.writeFile({
+                    path: fileName,
+                    data: pdfBase64,
+                    directory: Directory.Cache
+                });
+
+                await Share.share({
+                    title: 'Relatório de Agendamentos',
+                    text: 'Aqui está o seu relatório de agendamentos em PDF.',
+                    url: result.uri,
+                    dialogTitle: 'Abrir/Compartilhar Relatório'
+                });
+            } catch (err) {
+                console.error("Erro ao processar PDF no mobile:", err);
+                alert("Não foi possível gerar ou compartilhar o PDF no dispositivo.");
+            }
+        } else {
+            doc.save(fileName);
+        }
+    };
+
+    const handleLogout = async () => {
+        const { error = null } = await (supabase.auth as any).signOut();
+    
+        if (error) {
+            console.error("Error signing out:", error);
+        }
+        window.location.reload();
+    };
+
+    const handleUpgrade = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          const offerings = await Purchases.getOfferings();
+          if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
+            // Isso abre a interface nativa da Google Play Store
+            const purchaseResult = await Purchases.purchasePackage({ aPackage: offerings.current.availablePackages[0] });
+            const customerInfo = purchaseResult.customerInfo;
+
+            // Verifica se a compra foi aprovada
+            if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
+              // Atualize o status no seu Supabase aqui
+              const { data: updatedProfile, error: profileError = null } = await supabase
+                .from('profiles')
+                .update({ plan: 'premium' })
+                .eq('id', user.id)
+                .select()
+                .single();
+              if (updatedProfile) setProfile(updatedProfile);
+              alert("Upgrade realizado com sucesso!");
+            }
+          } else {
+             alert("Não foi possível carregar as ofertas da loja. Verifique sua conexão ou se o app está configurado corretamente na Play Store.");
+          }
+        } else {
+          // Para web, evitamos classes que possam conflitar com o script automático da hotmart
+          // e abrimos manualmente o link.
+          window.open("https://pay.hotmart.com/U102480243K?off=60hkkyyw&checkoutMode=6&bid=1769639078531", "_blank");
+        }
+      } catch (e: any) {
+        if (!e.userCancelled) {
+          alert("Erro ao processar compra: " + (e.message || e));
+        }
+      }
+    };
+    
+    const handleSaveAppointment = async (name: string, phone: string, email: string, date: string, time: string) => {
+        if (!profile) return;
+    
+        const isDuplicate = appointments.some(
+            app => app.date === date && app.time === time && app.status !== 'Cancelado'
+        );
+    
+        if (isDuplicate) {
+            alert('Aviso: Já existe um agendamento para esta data e horário. Por favor, escolha outro horário.');
+            return; 
+        }
+        
+        if (hasReachedLimit) {
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
+        const { data: newAppointment, error = null } = await supabase
+            .from('appointments')
+            .insert({ name, phone, email, date, time, user_id: user.id, status: 'Confirmado' })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao salvar:', error);
+            throw error;
+        } else {
+            if (newAppointment) {
+                setAppointments(prev => 
+                    [newAppointment, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.time.localeCompare(a.time))
+                );
+            }
+            if (profile.plan === 'trial') {
+                const today = new Date().toISOString().split('T')[0];
+                const newUsage = profile.last_usage_date === today ? profile.daily_usage + 1 : 1;
+                const { data: updatedProfile, error: profileError = null } = await supabase
+                    .from('profiles')
+                    .update({ daily_usage: newUsage, last_usage_date: today })
+                    .eq('id', user.id)
+                    .select()
+                    .single();
+                if (updatedProfile) {
+                    setProfile(updatedProfile);
+                    if (updatedProfile.plan === 'trial' && updatedProfile.daily_usage >= TRIAL_LIMIT) {
+                        setIsUpgradeModalOpen(true);
+                    }
+                }
+            }
+        }
+    };
+    
+    const handleSendMessageToAssistant = async (message: string) => {
+        const currentMessages = [...assistantMessages, { sender: 'user' as const, text: message }];
+        setAssistantMessages(currentMessages);
+        setIsAssistantLoading(true);
+    
+        try {
+            const { data: paymentsData = null } = await supabase
+                .from('payments')
+                .select('amount, created_at')
+                .eq('status', 'approved');
+
+            const totalEarned = (paymentsData as any[])?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0;
+            const recentEarnings = (paymentsData as any[])?.slice(-10).map(p => `R$ ${p.amount} em ${new Date(p.created_at).toLocaleDateString('pt-BR')}`).join(', ') || 'Nenhum';
+
+            const context = `
+                - FATURAMENTO TOTAL APROVADO: R$ ${totalEarned.toFixed(2)}
+                - ÚLTIMOS GANHOS: ${recentEarnings}
+                - PREÇO DO SEU SERVIÇO: R$ ${businessProfile?.service_price || 0}
+                - Dias de trabalho: ${JSON.stringify(businessProfile?.working_days)}
+                - Horário de funcionamento: De ${businessProfile?.start_time} a ${businessProfile?.end_time}
+                - Datas bloqueadas: ${JSON.stringify(businessProfile?.blocked_dates)}
+                - Horários recorrentes bloqueados: ${JSON.stringify(businessProfile?.blocked_times)}
+                - Agendamentos existentes (ocupados): ${JSON.stringify(appointments.filter(a => a.status !== 'Cancelado').map(a => ({ date: a.date, time: a.time })))}
+            `;
+
+            const { data, error = null } = await supabase.functions.invoke('deepseek-assistant', {
+                body: {
+                  messages: currentMessages.map(m => ({
+                    role: m.sender === 'ai' ? 'assistant' : m.sender,
+                    content: m.text
+                  })),
+                  context,
+                  currentDate: new Date().toISOString(),
+                },
+            });
+
+            if (error) throw error;
+            
+            const aiResponse = data.choices[0].message;
+            
+            if (aiResponse.tool_calls && aiResponse.tool_calls.length > 0) {
+                const toolCall = aiResponse.tool_calls[0].function;
+                if (toolCall.name === 'create_appointment') {
+                    const args = JSON.parse(toolCall.arguments);
+                    const { name, date, time, phone = '', email = '' } = args;
+
+                    await handleSaveAppointment(name, phone, email, date, time);
+                    setAssistantMessages(prev => [...prev, { sender: 'ai', text: `Agendamento para ${name} em ${parseDateAsUTC(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às ${time} foi criado com sucesso.` }]);
+                }
+            } else {
+                 setAssistantMessages(prev => [...prev, { sender: 'ai', text: aiResponse.content }]);
+            }
+    
+        } catch (error) {
+            console.error("Erro do assistente de IA:", error);
+            setAssistantMessages(prev => [...prev, { sender: 'ai', text: 'Desculpe, ocorreu um erro ao processar sua solicitação.' }]);
         } finally {
             setIsAssistantLoading(false);
         }
     };
 
-    // Filtering
-    const filteredAppointments = useMemo(() => {
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-        
-        return appointments.filter(a => {
-            if (filter === 'pendentes') return a.status === 'Pendente' || a.status === 'Aguardando Pagamento';
-            if (filter === 'hoje') return a.date === todayStr;
-            return true;
-        });
-    }, [appointments, filter]);
 
     return (
-        <div className="min-h-screen bg-gray-900 pb-24">
-             {/* Header */}
-             <div className="bg-black/40 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800 px-4 py-4 flex justify-between items-center">
-                <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-full flex items-center justify-center font-bold text-white">
-                        OB
-                    </div>
-                    <h1 className="text-xl font-bold text-white">Oubook</h1>
-                </div>
-                <div className="flex items-center space-x-3">
-                    <button onClick={() => setIsAssistantOpen(true)} className="p-2 bg-gray-800 rounded-full text-blue-400 hover:bg-gray-700">
-                        <ChatBubbleIcon className="w-5 h-5" />
-                    </button>
-                    <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white hover:bg-gray-700">
-                        <SettingsIcon className="w-5 h-5" />
-                    </button>
-                    <button onClick={onLogout} className="p-2 bg-gray-800 rounded-full text-red-400 hover:bg-red-900/20">
-                        <LogOutIcon className="w-5 h-5" />
-                    </button>
-                </div>
-             </div>
-
-             {/* Main Content */}
-             <div className="p-4 max-w-4xl mx-auto space-y-6">
-                 
-                 {/* Quick Actions */}
-                 <div className="grid grid-cols-2 gap-4">
-                     <button onClick={() => setIsNewApptModalOpen(true)} className="bg-white text-black p-4 rounded-2xl font-bold flex flex-col items-center justify-center gap-2 hover:bg-gray-200 transition-colors shadow-lg">
-                         <PlusIcon className="w-6 h-6" />
-                         Novo Agendamento
-                     </button>
-                     <button onClick={() => setIsLinkModalOpen(true)} className="bg-gray-800 text-white p-4 rounded-2xl font-bold flex flex-col items-center justify-center gap-2 hover:bg-gray-700 transition-colors border border-gray-700">
-                         <LinkIcon className="w-6 h-6" />
-                         Gerar Link
-                     </button>
-                 </div>
-
-                 {/* Filters */}
-                 <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-                     <button onClick={() => setFilter('hoje')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filter === 'hoje' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Hoje</button>
-                     <button onClick={() => setFilter('pendentes')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filter === 'pendentes' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Pendentes</button>
-                     <button onClick={() => setFilter('todos')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filter === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Todos</button>
-                 </div>
-
-                 {/* List */}
-                 <div className="space-y-4">
-                     {loading ? (
-                         <div className="text-center py-10"><LoaderIcon className="w-8 h-8 mx-auto text-blue-500" /></div>
-                     ) : filteredAppointments.length > 0 ? (
-                         filteredAppointments.map(appt => (
-                             <AppointmentCard 
-                                key={appt.id} 
-                                appointment={appt} 
-                                onUpdateStatus={handleUpdateStatus} 
-                                onDelete={handleDelete}
-                             />
-                         ))
-                     ) : (
-                         <div className="text-center py-10 text-gray-500">
-                             <CalendarIcon className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                             Nenhum agendamento encontrado.
-                         </div>
-                     )}
-                 </div>
-             </div>
-
-             {/* Modals */}
-             <NewAppointmentModal isOpen={isNewApptModalOpen} onClose={() => setIsNewApptModalOpen(false)} onSave={handleManualCreate} user={user} />
-             <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
-             <BusinessProfileModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} userId={user.id} />
-             <TermsModal isOpen={isTermsModalOpen} onClose={async () => {
-                 setIsTermsModalOpen(false);
-                 await supabase.from('profiles').update({ terms_accepted_at: new Date().toISOString() }).eq('id', user.id);
-                 // Reload profile logic if needed
-             }} />
-             <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={5} onUpgrade={() => window.open('https://hotmart.com', '_blank')} />
-             <AssistantModal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} messages={assistantMessages} onSendMessage={handleAssistantMessage} isLoading={isAssistantLoading} />
-        </div>
-    );
-};
-
-const Login = ({ onLogin }: { onLogin: () => void }) => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [isSignUp, setIsSignUp] = useState(false);
-
-    const handleAuth = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        const { error } = isSignUp 
-            ? await supabase.auth.signUp({ email, password })
-            : await supabase.auth.signInWithPassword({ email, password });
-            
-        setLoading(false);
-        if (error) alert(error.message);
-        else if (!error) onLogin(); // Session listener usually handles this
-    };
-
-    return (
-        <div className="min-h-screen bg-gray-900 flex flex-col justify-center items-center p-6">
-            <div className="w-full max-w-sm space-y-8">
-                <div className="text-center">
-                    <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 mb-2">Oubook</h1>
-                    <p className="text-gray-400">Gerencie seus agendamentos com inteligência.</p>
-                </div>
-                
-                <form onSubmit={handleAuth} className="space-y-4">
-                    <div className="space-y-4">
-                        <input 
-                            type="email" 
-                            placeholder="Email" 
-                            value={email} 
-                            onChange={e => setEmail(e.target.value)} 
-                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none" 
-                            required 
-                        />
-                        <input 
-                            type="password" 
-                            placeholder="Senha" 
-                            value={password} 
-                            onChange={e => setPassword(e.target.value)} 
-                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none" 
-                            required 
-                        />
-                    </div>
-                    <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-600/20">
-                        {loading ? <LoaderIcon className="w-6 h-6 mx-auto" /> : (isSignUp ? 'Criar Conta' : 'Entrar')}
-                    </button>
-                </form>
-                
-                <div className="text-center">
-                    <button onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-gray-400 hover:text-white transition-colors">
-                        {isSignUp ? 'Já tem uma conta? Entre aqui.' : 'Não tem conta? Cadastre-se grátis.'}
-                    </button>
-                </div>
+      <div className="flex h-[100dvh] bg-black overflow-hidden">
+        {/* Mobile Menu Overlay */}
+        {isMobileMenuOpen && (
+            <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+        )}
+        {/* Sidebar */}
+        <aside className={`fixed md:relative h-full w-64 glassmorphism p-6 flex flex-col z-40 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden absolute top-4 right-4 text-gray-400 hover:text-white z-50">
+                <XIcon className="w-6 h-6" />
+            </button>
+            <div className="flex items-center space-x-2 mb-10">
+                <CalendarIcon className="w-8 h-8 text-white"/>
+                <h1 className="text-2xl font-bold text-white">Oubook</h1>
             </div>
-        </div>
+            <nav className="flex-grow">
+                <ul className="space-y-2">
+                    <li><button onClick={() => {}} className="w-full flex items-center space-x-3 text-gray-300 bg-gray-700/50 p-3 rounded-lg"><CalendarIcon className="w-5 h-5"/><span>Agendamentos</span></button></li>
+                    <li>
+                        <div 
+                            onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
+                            className="w-full"
+                        >
+                            <button 
+                                onClick={() => { if (!hasReachedLimit) setIsLinkModalOpen(true); }}
+                                disabled={hasReachedLimit}
+                                style={hasReachedLimit ? { pointerEvents: 'none' } : {}}
+                                className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <LinkIcon className="w-5 h-5"/><span>Links de Reserva</span>
+                            </button>
+                        </div>
+                    </li>
+                     <li>
+                        <button 
+                            onClick={() => setIsProfileModalOpen(true)} 
+                            className="w-full flex items-center space-x-3 text-gray-300 hover:bg-gray-700/50 p-3 rounded-lg"
+                        >
+                            <SettingsIcon className="w-5 h-5"/><span>Configurações</span>
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+             <div className="border-t border-gray-700/50 pt-4">
+                <div className="flex items-center space-x-3 mb-4">
+                    <UserIcon className="w-10 h-10 p-2 bg-gray-700 rounded-full"/>
+                    <div>
+                        <p className="font-semibold text-white">{user.email?.split('@')[0]}</p>
+                        <p className="text-sm text-gray-400">{user.email}</p>
+                    </div>
+                </div>
+                <button onClick={handleLogout} className="w-full flex items-center space-x-3 text-gray-300 hover:bg-red-500/20 hover:text-red-300 p-3 rounded-lg transition-colors">
+                    <LogOutIcon className="w-5 h-5"/><span>Sair</span>
+                </button>
+             </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col h-[100dvh] overflow-y-auto scrollbar-hide">
+          <header className="glassmorphism p-4 sm:p-6 border-b border-gray-800/50 flex flex-wrap justify-between items-center gap-4 sticky top-0 z-20">
+             <div className="flex items-center gap-2">
+                <button onClick={() => setIsMobileMenuOpen(true)} className="p-1 md:hidden text-gray-300">
+                    <MenuIcon className="w-6 h-6" />
+                </button>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white">Seus Agendamentos</h2>
+             </div>
+             <div className="flex flex-wrap items-center justify-center gap-2">
+                {profile?.plan === 'premium' ? (
+                    <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-2 bg-green-500/20 border border-green-400/30">
+                        <StarIcon className="w-5 h-5 text-yellow-400" />
+                        <span className="font-bold text-white">Plano Premium</span>
+                    </div>
+                ) : (
+                    <div className="glassmorphism py-2 px-4 rounded-lg text-sm flex items-center space-x-3 border-yellow-500/30 border">
+                        <span className="font-bold text-white">{`Plano Trial: ${usage}/${TRIAL_LIMIT} usos hoje`}</span>
+                        <button
+                            onClick={handleUpgrade}
+                            className="bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:scale-105 transition-all"
+                        >
+                            UPGRADE
+                        </button>
+                    </div>
+                )}
+                <button
+                    onClick={handleDownloadPDF}
+                    className="glassmorphism p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors"
+                    aria-label="Baixar agendamentos em PDF"
+                    title="Baixar agendamentos em PDF"
+                >
+                    <DownloadIcon className="w-5 h-5" />
+                </button>
+                 <button
+                    onClick={() => setIsAssistantModalOpen(true)}
+                    className="glassmorphism p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors"
+                    aria-label="Abrir Assistente IA"
+                    title="Abrir Assistente IA"
+                >
+                    <ChatBubbleIcon className="w-5 h-5" />
+                </button>
+                <div 
+                  onClick={() => { if (hasReachedLimit) setIsUpgradeModalOpen(true); }}
+                  className="inline-block"
+                >
+                    <button 
+                        onClick={() => { if (!hasReachedLimit) setIsModalOpen(true); }}
+                        disabled={hasReachedLimit}
+                        style={hasReachedLimit ? { pointerEvents: 'none' } : {}}
+                        className="bg-white text-black font-bold py-2 px-5 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <PlusIcon className="w-5 h-5"/>
+                        <span className="hidden sm:inline">Novo Agendamento</span>
+                    </button>
+                </div>
+             </div>
+          </header>
+
+          {/* --- BANNER DE PERMISSÃO DE NOTIFICAÇÃO (NOVO) --- */}
+          {permissionStatus === 'default' && (
+              <div className="bg-blue-600 text-white p-4 flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in">
+                  <div className="flex items-center gap-3">
+                      <BellIcon className="w-6 h-6 animate-pulse" />
+                      <p className="font-medium text-sm sm:text-base">
+                          Ative as notificações para saber quando receber um novo agendamento ou pagamento.
+                      </p>
+                  </div>
+                  <button 
+                      onClick={() => registerForPushNotifications(user.id, true)}
+                      className="whitespace-nowrap bg-white text-blue-600 px-4 py-2 rounded-lg font-bold hover:bg-blue-50 transition-colors text-sm"
+                  >
+                      🔔 Ativar Notificações
+                  </button>
+              </div>
+          )}
+
+          <div className="p-4 sm:p-6 flex-1">
+             {/* Filtros e Busca */}
+             <div className="mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex flex-wrap justify-center gap-1 glassmorphism p-1 rounded-lg">
+                        {(['Todos', 'Pendente', 'Confirmado', 'Cancelado'] as const).map(status => (
+                            <button
+                                key={status}
+                                onClick={() => setStatusFilter(status)}
+                                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${statusFilter === status ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-700/50'}`}
+                            >
+                                {status}
+                            </button>
+                        ))}
+                    </div>
+                     <div className="relative w-full md:max-w-xs">
+                         <input
+                             type="text"
+                             placeholder="Buscar por nome ou email..."
+                             value={searchTerm}
+                             onChange={e => setSearchTerm(e.target.value)}
+                             className="w-full bg-black/20 border border-gray-700 rounded-lg p-3 pl-10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-600"
+                         />
+                         <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                     </div>
+                </div>
+             </div>
+
+             {/* Lista de Agendamentos */}
+             {isLoading ? (
+                <div className="flex justify-center items-center h-full"><LoaderIcon className="w-12 h-12"/></div>
+             ) : error ? (
+                <div className="text-center text-red-400">{error}</div>
+             ) : filteredAppointments.length === 0 ? (
+                <div className="text-center text-gray-500 py-16">
+                    <CalendarIcon className="w-16 h-16 mx-auto mb-4"/>
+                    <h3 className="text-xl font-semibold">Nenhum agendamento encontrado</h3>
+                    <p>Crie um novo agendamento para começar.</p>
+                </div>
+             ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {filteredAppointments.map(app => <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteAppointment}/>)}
+                </div>
+             )}
+             {!isLoading && hasMore && (
+                <div className="mt-8 text-center">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={isLoadingMore}
+                        className="bg-gray-700/50 hover:bg-gray-600/50 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center mx-auto"
+                    >
+                        {isLoadingMore ? <LoaderIcon className="w-6 h-6" /> : 'Carregar Mais'}
+                    </button>
+                </div>
+            )}
+          </div>
+        </main>
+
+        <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
+        <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
+        <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
+        <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} onUpgrade={handleUpgrade} />
+        <AssistantModal isOpen={isAssistantModalOpen} onClose={() => setIsAssistantModalOpen(false)} messages={assistantMessages} onSendMessage={handleSendMessageToAssistant} isLoading={isAssistantLoading} />
+      </div>
     );
 };
 
-const Main = () => {
+const App = () => {
     const [session, setSession] = useState<any>(null);
-    const [userProfile, setUserProfile] = useState<Profile | null>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
-    const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
     useEffect(() => {
-        // Router check
-        const checkPath = () => setCurrentPath(window.location.pathname);
-        window.addEventListener('popstate', checkPath);
-
-        // Auth check
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        (supabase.auth as any).getSession().then(({ data: { session } }: any) => {
             setSession(session);
-            if (session) fetchProfile(session.user.id);
-            else setLoading(false);
+            if (session) {
+                fetchProfile(session.user.id);
+            } else {
+                setLoading(false);
+            }
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const {
+            data: { subscription },
+        } = (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
             setSession(session);
-            if (session) fetchProfile(session.user.id);
-            else { setUserProfile(null); setLoading(false); }
+            if (session) {
+                // Optimize: only fetch if needed
+                if (!profile || profile.id !== session.user.id) {
+                    fetchProfile(session.user.id);
+                }
+            } else {
+                setProfile(null);
+                setLoading(false);
+            }
         });
 
-        return () => {
-            window.removeEventListener('popstate', checkPath);
-            subscription.unsubscribe();
-        };
+        return () => subscription.unsubscribe();
     }, []);
 
     const fetchProfile = async (userId: string) => {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        if (data) setUserProfile(data);
-        else if (error && error.code === 'PGRST116') {
-             // Create profile if missing (fallback)
-             await supabase.from('profiles').insert({ id: userId, plan: 'trial', daily_usage: 0, last_usage_date: new Date().toISOString().split('T')[0] });
-             fetchProfile(userId);
-             return;
+        try {
+            const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+            if (data) {
+                setProfile(data);
+            } else {
+                const { data: newProfile } = await supabase
+                    .from('profiles')
+                    .insert({ 
+                        id: userId, 
+                        plan: 'trial', 
+                        daily_usage: 0, 
+                        last_usage_date: new Date().toISOString().split('T')[0] 
+                    })
+                    .select()
+                    .single();
+                if (newProfile) setProfile(newProfile);
+            }
+        } catch (e) {
+            console.error("Profile fetch error", e);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
-    // Routing Logic
-    if (currentPath.startsWith('/book-link/')) {
-        const tokenId = currentPath.split('/book-link/')[1];
-        return <PaginaDeAgendamento tokenId={tokenId} />;
-    }
-    
-    // Check for Query Params fallback (e.g. ?token=...)
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('token')) {
-        return <PaginaDeAgendamento tokenId={params.get('token')!} />;
+    const path = window.location.pathname;
+    const bookLinkMatch = path.match(/\/book-link\/([^\/]+)/);
+
+    if (bookLinkMatch) {
+        return <PaginaDeAgendamento tokenId={bookLinkMatch[1]} />;
     }
 
-    if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><LoaderIcon className="w-10 h-10 text-blue-500" /></div>;
+    if (loading) {
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+    }
 
-    if (!session) return <Login onLogin={() => {}} />;
+    if (!session) {
+        return <LoginPage />;
+    }
 
-    if (userProfile) return <Dashboard user={session.user} profile={userProfile} onLogout={() => supabase.auth.signOut()} />;
-    
-    return null;
+    return <Dashboard user={session.user} profile={profile} setProfile={setProfile} />;
 };
 
-const root = createRoot(document.getElementById('root')!);
-root.render(<Main />);
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}

@@ -8,16 +8,6 @@ export interface Profile {
   role: 'super_admin' | 'admin' | 'employee';
 }
 
-export interface BusinessProfile {
-  user_id: string;
-  blocked_dates: string[];
-  blocked_times: Record<string, string[]>;
-  working_days: Record<string, boolean>;
-  start_time: string;
-  end_time: string;
-  service_price: number;
-}
-
 export interface AttendanceRecord {
   id?: number;
   user_id: string;

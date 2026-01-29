@@ -62,15 +62,3 @@ export const getReadableWeekRange = (weekId: string): string => {
 
   return `${formatDate(startDate)} a ${formatDate(endDate, true)}`;
 };
-
-export const parseDateAsUTC = (dateString: string): Date => {
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-};
-
-export const maskPhone = (value: string) => {
-  return value
-    .replace(/\D/g, "")
-    .replace(/^(\d{2})(\d)/g, "($1) $2")
-    .replace(/(\d)(\d{4})$/, "$1-$2");
-};
