@@ -247,13 +247,164 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
     );
 };
 
-const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
+const NewAppointmentModal = ({ isOpen, onClose, onSave, user, businessProfile }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User, businessProfile: BusinessProfile | null }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    
+    // VISUAL PICKER STATES
+    const [mode, setMode] = useState<'visual' | 'manual'>('visual');
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [dayAppointments, setDayAppointments] = useState<string[]>([]);
+    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            // Reset fields
+            setName(''); setEmail(''); setPhone(''); setDate(''); setTime('');
+            setSelectedDate(null); setSelectedTime(null);
+            setMode('visual');
+            setDayAppointments([]);
+        }
+    }, [isOpen]);
+
+    // Update form date/time when visual selection changes
+    useEffect(() => {
+        if (selectedDate) {
+            setDate(selectedDate.toISOString().split('T')[0]);
+        }
+        if (selectedTime) {
+            setTime(selectedTime);
+        }
+    }, [selectedDate, selectedTime]);
+
+    // Fetch appointments for the selected date
+    useEffect(() => {
+        const fetchDayAppointments = async () => {
+            if (!selectedDate || !user.id) return;
+            setIsLoadingSlots(true);
+            const dateString = selectedDate.toISOString().split('T')[0];
+            
+            const { data, error } = await supabase
+                .from('appointments')
+                .select('time')
+                .eq('user_id', user.id)
+                .eq('date', dateString)
+                .neq('status', 'Cancelado');
+            
+            if (data) {
+                setDayAppointments(data.map(d => d.time));
+            }
+            setIsLoadingSlots(false);
+        };
+        fetchDayAppointments();
+    }, [selectedDate, user.id]);
+
+    const dayMap = useMemo(() => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'], []);
+
+    const isDayAvailable = useCallback((d: Date): boolean => {
+        if (!businessProfile) return true; // If no profile, assume available
+        
+        // For admin, we might want to allow booking in the past? Usually not.
+        // const today = new Date();
+        // today.setUTCHours(0, 0, 0, 0);
+        // if (d < today) return false; 
+
+        const dateString = d.toISOString().split('T')[0];
+        const dayOfWeek = dayMap[d.getUTCDay()];
+        
+        if (businessProfile.working_days && !businessProfile.working_days[dayOfWeek]) return false;
+        if (businessProfile.blocked_dates && businessProfile.blocked_dates.includes(dateString)) return false;
+        
+        return true;
+    }, [businessProfile, dayMap]);
+
+    const availableTimeSlots = useMemo(() => {
+        if (!selectedDate || !businessProfile) return [];
+        
+        const slots = [];
+        const startTime = businessProfile.start_time || '09:00';
+        const endTime = businessProfile.end_time || '17:00';
+
+        const [startHour] = startTime.split(':').map(Number);
+        const [endHour] = endTime.split(':').map(Number);
+
+        for (let hour = startHour; hour < endHour; hour++) {
+            slots.push(`${String(hour).padStart(2, '0')}:00`);
+        }
+
+        const dayOfWeek = dayMap[selectedDate.getUTCDay()];
+        const blockedRecurringTimes = businessProfile.blocked_times[dayOfWeek] || [];
+
+        // Admin sees all slots, but we visually indicate blocked/busy ones
+        // Actually, for "Novo Agendamento", we should show what is free.
+        return slots.filter(slot => {
+            return !dayAppointments.includes(slot) && 
+                   !blockedRecurringTimes.includes(slot);
+        });
+    }, [selectedDate, businessProfile, dayAppointments, dayMap]);
+
+    const changeMonth = (amount: number) => {
+      setCurrentMonth(prev => {
+          const newDate = new Date(prev.getFullYear(), prev.getMonth() + amount, 1);
+          return newDate;
+      });
+    };
+
+    const handleDateSelect = (d: Date) => {
+        setSelectedDate(d);
+        setSelectedTime(null);
+    };
+
+    const Calendar = () => {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        const days = Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`}></div>);
+        for (let day = 1; day <= daysInMonth; day++) {
+            const d = new Date(Date.UTC(year, month, day));
+            const isAvailable = isDayAvailable(d);
+            const isSelected = selectedDate && d.getTime() === selectedDate.getTime();
+            
+            let classes = "w-10 h-10 flex items-center justify-center rounded-full transition-colors text-sm ";
+            if (isAvailable) {
+                classes += isSelected 
+                    ? "bg-gray-200 text-black font-bold" 
+                    : "bg-black/20 text-white hover:bg-gray-700 cursor-pointer";
+            } else {
+                classes += "text-gray-600 cursor-not-allowed opacity-50";
+            }
+            
+            days.push(
+                <button key={day} type="button" onClick={() => handleDateSelect(d)} disabled={!isAvailable && mode === 'visual'} className={classes}>
+                    {day}
+                </button>
+            );
+        }
+
+        return (
+            <div className="bg-black/20 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <button type="button" onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeftIcon className="w-5 h-5 text-white"/></button>
+                    <h3 className="font-bold text-white text-lg">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+                    <button type="button" onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-700"><ChevronRightIcon className="w-5 h-5 text-white"/></button>
+                </div>
+                <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
+                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                    {days}
+                </div>
+            </div>
+        );
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -265,7 +416,6 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
         setIsSaving(true);
         await onSave(name, unmaskedPhone, email, date, time);
         setIsSaving(false);
-        setName(''); setEmail(''); setPhone(''); setDate(''); setTime('');
         onClose();
     };
 
@@ -275,9 +425,54 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
                 <input type="text" placeholder="Nome do Cliente" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="tel" placeholder="Telefone do Cliente (DDD + Número)" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} required maxLength={15} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
                 <input type="email" placeholder="Email do Cliente (Opcional)" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
-                <button type="submit" disabled={isSaving} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
+                
+                {/* Mode Toggle */}
+                <div className="flex bg-black/30 p-1 rounded-lg">
+                    <button type="button" onClick={() => setMode('visual')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'visual' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                        Visual
+                    </button>
+                    <button type="button" onClick={() => setMode('manual')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${mode === 'manual' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                        Manual
+                    </button>
+                </div>
+
+                {mode === 'manual' ? (
+                    <>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                        <input type="time" value={time} onChange={e => setTime(e.target.value)} required className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                    </>
+                ) : (
+                    <>
+                        <Calendar />
+                        {selectedDate && (
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-300 mb-2">Horários Disponíveis</h3>
+                                {isLoadingSlots ? (
+                                    <div className="flex justify-center py-4"><LoaderIcon className="w-6 h-6 text-gray-400" /></div>
+                                ) : availableTimeSlots.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 max-h-48 overflow-y-auto pr-1 scrollbar-hide">
+                                        {availableTimeSlots.map(t => (
+                                            <button 
+                                                key={t} 
+                                                type="button"
+                                                onClick={() => setSelectedTime(t)}
+                                                className={`p-4 rounded-lg text-sm transition-colors ${selectedTime === t ? 'bg-gray-200 text-black font-bold' : 'bg-black/20 text-white hover:bg-gray-700'}`}
+                                            >
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-gray-500 text-sm py-2">Nenhum horário disponível ou agenda cheia.</p>
+                                )}
+                            </div>
+                        )}
+                        <input type="hidden" required value={date} />
+                        <input type="hidden" required value={time} />
+                    </>
+                )}
+
+                <button type="submit" disabled={isSaving || !date || !time} className="w-full bg-gray-200 text-black font-bold py-3 px-4 rounded-lg hover:bg-white transition-colors disabled:opacity-50">
                     {isSaving ? <LoaderIcon className="w-6 h-6 mx-auto" /> : 'Salvar Agendamento'}
                 </button>
             </form>
@@ -1417,7 +1612,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                     <div>
                                         <h3 className="text-lg font-semibold text-white mb-2 text-center">Horários disponíveis para {selectedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</h3>
                                         {availableTimeSlots.length > 0 ? (
-                                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                                                 {availableTimeSlots.map(time => (
                                                     <button 
                                                         key={time} 
@@ -2335,7 +2530,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
           </div>
         </main>
 
-        <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
+        <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} businessProfile={businessProfile} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
         <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
         <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} onUpgrade={handleUpgrade} />
