@@ -128,7 +128,7 @@ const CheckCircleIcon = (p: any) => <Icon {...p}><path d="M22 11.08V12a10 10 0 1
 const XCircleIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Icon>;
 const LoaderIcon = (p: any) => <Icon {...p} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></Icon>;
 const XIcon = (p: any) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>;
-const SettingsIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
+const SettingsIcon = (p: any) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
 const StarIcon = (p: any) => <Icon {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Icon>;
 const ChevronLeftIcon = (p: any) => <Icon {...p}><polyline points="15 18 9 12 15 6"/></Icon>;
 const ChevronRightIcon = (p: any) => <Icon {...p}><polyline points="9 18 15 12 9 6"/></Icon>;
@@ -391,6 +391,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
                 throw error || new Error("Não foi possível obter o ID do link gerado.");
             }
             
+            // Usando URL fixa conforme solicitado
             const newLink = `https://oubook.com.br/book-link/${data.id}`;
             setGeneratedLink(newLink);
         } catch (err: any) {
@@ -446,7 +447,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
     );
 };
 
-const BusinessProfileModal = ({ isOpen, onClose, userId, onRequestNotifications }: { isOpen: boolean, onClose: () => void, userId: string, onRequestNotifications: () => void }) => {
+const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, onClose: () => void, userId: string }) => {
     const [profile, setProfile] = useState<BusinessProfile>({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: {}, start_time: '09:00', end_time: '17:00', service_price: 0 });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -596,19 +597,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId, onRequestNotifications 
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70dvh] overflow-y-auto pr-2 scrollbar-hide">
                     
-                    {/* Notification Section (Permanently visible here) */}
-                    <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                        <h3 className="text-lg font-semibold text-white mb-2">Notificações</h3>
-                        <p className="text-sm text-gray-400 mb-4">Receba alertas sobre novos agendamentos e pagamentos.</p>
-                        <button 
-                            onClick={onRequestNotifications}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                        >
-                            <BellIcon className="w-5 h-5" />
-                            Ativar / Testar Notificações
-                        </button>
-                    </div>
-
                     {/* Mercado Pago Connection */}
                      <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
                         <h3 className="text-lg font-semibold text-white mb-2">Pagamentos (Mercado Pago)</h3>
@@ -1363,7 +1351,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     }
 
     if (linkStatus === 'loading') {
-        return <div className="min-h-screen bg-white flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-black" /></div>;
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     if (linkStatus === 'invalid' || linkStatus === 'used') {
@@ -1599,8 +1587,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const [isAssistantLoading, setIsAssistantLoading] = useState(false);
     
     // State to track notification permission status for UI button
-    // Updated to handle both Web (NotificationPermission) and Native (PermissionState) strings
-    const [permissionStatus, setPermissionStatus] = useState<string>('granted'); // Start as granted to avoid flash, then check async
+    const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>(
+        typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+    );
     const [isTestingNotification, setIsTestingNotification] = useState(false);
 
 
@@ -1758,21 +1747,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         };
     }, [user.id, fetchDashboardData]);
     
-    // Efeito para registrar para notificações push (Híbrido) - verificação inicial
+    // Efeito para registrar para notificações push (Híbrido)
     useEffect(() => {
-        const checkPermission = async () => {
-            if (Capacitor.isNativePlatform()) {
-                const perm = await PushNotifications.checkPermissions();
-                setPermissionStatus(perm.receive);
-            } else if (typeof Notification !== 'undefined') {
-                setPermissionStatus(Notification.permission);
-            } else {
-                setPermissionStatus('denied');
-            }
-        };
-        
-        checkPermission();
-        
         if (user.id) {
             registerForPushNotifications(user.id, false); // false = not manual (initial check)
         }
@@ -1783,9 +1759,10 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         // 1. WEB PUSH (Navegador)
         if (platform === 'web' && messaging) {
+            setPermissionStatus(Notification.permission);
+
             if (!manual && Notification.permission !== 'granted') {
                 console.log("Web Push: Waiting for user gesture.");
-                setPermissionStatus(Notification.permission);
                 return;
             }
 
@@ -1794,6 +1771,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 setPermissionStatus(permission);
 
                 if (permission === 'granted') {
+                    // --- CORREÇÃO CRÍTICA AQUI ---
                     // Registra explicitamente o Service Worker antes de pedir o token
                     let registration;
                     try {
@@ -1801,6 +1779,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                         console.log('Service Worker registrado com sucesso:', registration);
                     } catch (swError) {
                         console.error('Falha ao registrar Service Worker:', swError);
+                        // Tenta continuar mesmo se falhar (alguns browsers já podem ter registrado)
                     }
 
                     // Passa a registration explicitamente para o getToken
@@ -1824,7 +1803,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                                     try {
                                         new Notification(title || "Nova Mensagem", {
                                             body: body,
-                                            icon: '/icon.png',
+                                            icon: '/icon.svg',
                                         });
                                     } catch (e) {
                                         alert(`${title}\n${body}`);
@@ -1854,12 +1833,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                 if (permStatus.receive === 'prompt') {
                     permStatus = await PushNotifications.requestPermissions();
                 }
-                
-                setPermissionStatus(permStatus.receive);
         
                 if (permStatus.receive !== 'granted') {
                     console.log('Permissão para notificações nativas não concedida.');
-                    if(manual) alert("Permissão de notificação negada nas configurações do aparelho.");
                     return;
                 }
         
@@ -1871,12 +1847,10 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     await supabase.functions.invoke('register-push-token', {
                         body: { token: token.value }
                     });
-                    if(manual) alert("Notificações nativas ativadas!");
                 });
         
                 PushNotifications.addListener('registrationError', (error) => {
                     console.error('Erro no registro de push nativo:', error);
-                    if(manual) alert("Erro ao registrar push nativo: " + error.error);
                 });
 
                 PushNotifications.addListener('pushNotificationReceived', (notification) => {
@@ -1885,9 +1859,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                     alert(`🔔 ${notification.title}\n${notification.body}`);
                 });
         
-            } catch (error: any) {
+            } catch (error) {
                 console.error("Erro ao configurar notificações push nativas:", error);
-                if(manual) alert("Erro: " + error.message);
             }
         }
     };
@@ -2048,7 +2021,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         } else {
           // Para web, evitamos classes que possam conflitar com o script automático da hotmart
           // e abrimos manualmente o link.
-          window.open("https://pay.hotmart.com/U102480243K?checkoutMode=2", "_blank");
+          window.open("https://pay.hotmart.com/U102480243K?off=60hkkyyw&checkoutMode=6&bid=1769639078531", "_blank");
         }
       } catch (e: any) {
         if (!e.userCancelled) {
@@ -2287,7 +2260,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
           </header>
 
           {/* --- BANNER DE PERMISSÃO DE NOTIFICAÇÃO (NOVO) --- */}
-          {(permissionStatus === 'default' || permissionStatus === 'prompt') && (
+          {permissionStatus === 'default' && (
               <div className="bg-blue-600 text-white p-4 flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in">
                   <div className="flex items-center gap-3">
                       <BellIcon className="w-6 h-6 animate-pulse" />
@@ -2364,7 +2337,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 
         <NewAppointmentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveAppointment} user={user} />
         <LinkGeneratorModal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} userId={user.id} />
-        <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} onRequestNotifications={() => registerForPushNotifications(user.id, true)} />
+        <BusinessProfileModal isOpen={isProfileModalOpen} onClose={() => { setIsProfileModalOpen(false); fetchDashboardData(); }} userId={user.id} />
         <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} limit={TRIAL_LIMIT} onUpgrade={handleUpgrade} />
         <AssistantModal isOpen={isAssistantModalOpen} onClose={() => setIsAssistantModalOpen(false)} messages={assistantMessages} onSendMessage={handleSendMessageToAssistant} isLoading={isAssistantLoading} />
       </div>
@@ -2437,7 +2410,7 @@ const App = () => {
     }
 
     if (loading) {
-        return <div className="min-h-screen bg-white flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-black" /></div>;
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     if (!session) {
