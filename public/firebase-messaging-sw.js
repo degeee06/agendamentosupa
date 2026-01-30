@@ -37,13 +37,13 @@ messaging.onBackgroundMessage((payload) => {
   // Apenas exibe manualmente se for uma mensagem somente de dados (Data-only)
   const notificationTitle = payload.data?.title;
   const notificationBody = payload.data?.body;
-  const notificationIcon = '/icon.svg';
+  const notificationIcon = '/icon.png';
 
   if (notificationTitle) {
       const notificationOptions = {
         body: notificationBody,
         icon: notificationIcon,
-        badge: '/icon.svg',
+        badge: '/icon.png',
         renotify: true,
         tag: 'oubook-notification',
         requireInteraction: true,

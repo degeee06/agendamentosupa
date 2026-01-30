@@ -391,7 +391,8 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
                 throw error || new Error("Não foi possível obter o ID do link gerado.");
             }
             
-            const newLink = `${PRODUCTION_URL}/book-link/${data.id}`;
+            // Alterado para usar o domínio oubook.com.br
+            const newLink = `https://oubook.com.br/book-link/${data.id}`;
             setGeneratedLink(newLink);
         } catch (err: any) {
             console.error("Erro ao gerar link:", err);
@@ -1802,7 +1803,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                                     try {
                                         new Notification(title || "Nova Mensagem", {
                                             body: body,
-                                            icon: '/icon.svg',
+                                            icon: '/icon.png',
                                         });
                                     } catch (e) {
                                         alert(`${title}\n${body}`);
