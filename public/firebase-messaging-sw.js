@@ -13,29 +13,78 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Força o SW a ativar imediatamente
+// Nome do Cache para controle de versão
+const CACHE_NAME = 'oubook-pwa-v1';
+// Arquivos essenciais para o "Shell" do app funcionar offline
+const ASSETS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/index.css',
+  '/manifest.json',
+  '/icon.svg'
+];
+
+// Instalação: Cache dos arquivos estáticos essenciais
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      // Tenta cachear, mas não falha a instalação se um arquivo opcional falhar
+      return cache.addAll(ASSETS_TO_CACHE).catch(err => console.warn('Falha parcial no cache:', err));
+    })
+  );
 });
 
+// Ativação: Limpeza de caches antigos
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    ])
+  );
 });
 
-// --- REQUISITO PWA: Handler de Fetch ---
-// Para que o navegador mostre o botão de instalar, o SW precisa interceptar requisições.
+// Fetch: Estratégia Network First (Tenta rede, se falhar, usa cache)
+// Isso é CRUCIAL para o banner de instalação aparecer
 self.addEventListener('fetch', (event) => {
-  // Apenas passa a requisição adiante (Network Only), mas satisfaz o critério de PWA.
-  // Você pode adicionar lógica de cache aqui no futuro se quiser funcionamento offline.
-  event.respondWith(fetch(event.request));
+  // Ignora requisições que não sejam GET ou que sejam para esquemas não suportados (ex: chrome-extension)
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+
+  // Para navegação (HTML), tenta rede -> cache -> fallback offline
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => {
+          return caches.match('/index.html')
+            .then(response => response || caches.match('/'));
+        })
+    );
+    return;
+  }
+
+  // Para outros recursos, tenta rede -> cache
+  event.respondWith(
+    fetch(event.request)
+      .catch(() => caches.match(event.request))
+  );
 });
 
-// Listener padrão do Firebase
+// Listener padrão do Firebase para mensagens em background
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano ', payload);
   
   if (payload.notification) {
-      console.log("Notificação gerenciada pelo sistema (payload contém chave 'notification').");
       return; 
   }
 
@@ -60,7 +109,6 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  
   const targetUrl = event.notification.data?.landing_page || '/';
 
   event.waitUntil(
