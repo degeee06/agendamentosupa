@@ -150,6 +150,7 @@ const BellIcon = (p: any) => <Icon {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3
 
 
 // --- COMPONENTES DE UI ---
+// (Mantenha os componentes UI inalterados, AppointmentCard, Modal, etc...)
 const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   const baseClasses = "px-3 py-1 text-xs font-medium rounded-full text-white";
   const statusClasses = {
@@ -247,6 +248,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
     );
 };
 
+// ... (Rest of modal components: NewAppointmentModal, PaymentModal, LinkGeneratorModal, BusinessProfileModal, UpgradeModal, TermsModal, AssistantModal - Keep existing implementations) ...
 const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -2019,10 +2021,34 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
              alert("Não foi possível carregar as ofertas da loja. Verifique sua conexão ou se o app está configurado corretamente na Play Store.");
           }
         } else {
-          // Para web, evitamos classes que possam conflitar com o script automático da hotmart
-          // e abrimos manualmente o link.
-          // ADICIONADO: Parametro sck para rastreamento do usuário
-          window.open(`https://pay.hotmart.com/U102480243K?off=60hkkyyw&checkoutMode=6&bid=1769639078531&sck=${user.id}`, "_blank");
+            // WEB - STRIPE CHECKOUT FLOW
+            // Invoca a Edge Function para criar a sessão do Stripe
+            try {
+                const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+                    body: {
+                        // ID do produto/preço passado no HTML do usuário
+                        lookup_key: "Oubook_Premium-7be1909", 
+                        return_url: window.location.origin
+                    }
+                });
+
+                if (error) {
+                    console.error("Erro na função Stripe:", error);
+                    alert("Erro ao conectar com o sistema de pagamento. Tente novamente.");
+                    return;
+                }
+
+                if (data?.url) {
+                    // Redireciona para o Checkout do Stripe
+                    window.location.href = data.url;
+                } else {
+                    alert("Não foi possível gerar o link de pagamento.");
+                }
+
+            } catch (stripeErr: any) {
+                console.error("Erro Stripe Checkout:", stripeErr);
+                alert("Erro ao processar pagamento: " + stripeErr.message);
+            }
         }
       } catch (e: any) {
         if (!e.userCancelled) {
@@ -2377,6 +2403,30 @@ const App = () => {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Adiciona listener Realtime para atualizar o Perfil (Plano) instantaneamente
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const channel = supabase
+            .channel(`profile-updates-${session.user.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'profiles',
+                    filter: `id=eq.${session.user.id}`
+                },
+                (payload) => {
+                    console.log("Perfil atualizado em tempo real:", payload.new);
+                    setProfile(payload.new as Profile);
+                }
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [session?.user?.id]);
 
     const fetchProfile = async (userId: string) => {
         try {

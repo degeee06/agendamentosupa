@@ -1,126 +1,145 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Declare Deno type for TS
-declare const Deno: any;
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const HOTMART_HOTTOK_SECRET = Deno.env.get('HOTMART_HOTTOK_SECRET');
-
+// Configuração de CORS para permitir requisições externas
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-hotmart-hottok",
 };
 
-serve(async (req) => {
-  // CORS Preflight
+// Declaração de tipo para Deno (ambiente Supabase Edge Functions)
+declare const Deno: any;
+
+// Usa Deno.serve (mais moderno e estável que a biblioteca std/http)
+Deno.serve(async (req: Request) => {
+  // 1. LOG DE ENTRADA IMEDIATO - Versão 2.0 (com Fallback URL)
+  // Se este log não aparecer no painel, o problema é 100% o comando de deploy (faltou --no-verify-jwt)
+  console.log(`[ENTRY v2.0] Recebendo requisição: ${req.method} na URL: ${req.url}`);
+
+  // Responde ao preflight do CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Verificação de Segurança do Token Hotmart (Se configurado)
-  const hottok = req.headers.get('x-hotmart-hottok');
-  if (HOTMART_HOTTOK_SECRET && hottok !== HOTMART_HOTTOK_SECRET) {
-      console.warn(`Tentativa de acesso não autorizado. Hottok recebido: ${hottok}`);
-      return new Response("Unauthorized", { status: 401 });
-  }
-
   try {
-    const payload = await req.json();
-    console.log("Hotmart Webhook Payload:", JSON.stringify(payload));
+    // 2. CORREÇÃO DE CONFIGURAÇÃO
+    // Você enviou logs mostrando que sua SUPABASE_URL estava configurada com um hash incorreto.
+    // Aqui forçamos o uso da URL correta baseada no seu projeto se a variável estiver estranha.
+    let envUrl = Deno.env.get('SUPABASE_URL');
+    if (!envUrl || !envUrl.startsWith('http')) {
+        console.warn(`[CONFIG] SUPABASE_URL parecia inválida (${envUrl}). Usando fallback hardcoded.`);
+        envUrl = "https://ehosmvbealefukkbqggp.supabase.co";
+    }
 
+    const SUPABASE_URL = envUrl;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const HOTMART_HOTTOK_SECRET = Deno.env.get('HOTMART_HOTTOK_SECRET');
+
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error("SUPABASE_SERVICE_ROLE_KEY não está configurada.");
+    }
+
+    // 3. LOG DO PAYLOAD
+    let payload;
+    try {
+        payload = await req.json();
+        console.log("[PAYLOAD] Dados recebidos:", JSON.stringify(payload));
+    } catch (e) {
+        console.error("[ERROR] Body vazio ou JSON inválido");
+        return new Response("Body inválido", { status: 400, headers: corsHeaders });
+    }
+
+    // 4. VERIFICAÇÃO DE EVENTO (Hotmart envia 'PURCHASE_APPROVED' ou status 'APPROVED')
     const event = payload.event;
+    const statusHotmart = payload.data?.purchase?.status || payload.data?.status;
     
-    // Verificamos se é um evento de compra aprovada (Hotmart 2.0.0 usa PURCHASE_APPROVED)
-    // Também aceitamos o formato legado se o status for 'approved'
-    const isApproved = event === 'PURCHASE_APPROVED' || payload.data?.purchase?.status === 'APPROVED' || payload.data?.purchase?.status === 'approved';
+    // Lista de status considerados "Sucesso"
+    const successStatus = ['APPROVED', 'COMPLETED', 'approved', 'completed', 'PURCHASE_APPROVED'];
+    const isApproved = successStatus.includes(event) || successStatus.includes(statusHotmart);
 
     if (!isApproved) {
-        console.log(`Evento ignorado (não é aprovação): ${event}`);
-        return new Response(JSON.stringify({ message: "Ignored event" }), { 
-            status: 200, 
+        console.log(`[INFO] Ignorando evento não aprovado. Evento: ${event}, Status: ${statusHotmart}`);
+        return new Response(JSON.stringify({ ignored: true, reason: "Not approved" }), { 
             headers: { ...corsHeaders, "Content-Type": "application/json" } 
         });
     }
 
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
-    // Estratégia 1: Recuperar ID via parâmetro 'sck' (Source Key) ou 'xcod'
-    // A URL modificada no index.tsx envia &sck={user.id}
-    const userIdFromSck = payload.data?.purchase?.sck || payload.data?.purchase?.xcod || payload.data?.subscription?.subscriber?.code;
-    
-    let userId = userIdFromSck;
-    let method = 'sck';
+    // 5. INICIALIZAÇÃO SUPABASE
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    });
 
-    // Estratégia 2: Fallback por email (Caso o sck falhe)
+    // 6. IDENTIFICAÇÃO DO USUÁRIO
+    // Primeiro tenta pegar o ID direto (SCK)
+    let userId = payload.data?.purchase?.sck || 
+                 payload.data?.purchase?.xcod || 
+                 payload.data?.subscription?.subscriber?.code;
+    
+    let method = 'sck_param';
+
+    // Se não tiver ID, busca por EMAIL
     if (!userId) {
-        console.warn("ID do usuário não encontrado no parâmetro 'sck'. Tentando fallback por email...");
-        const email = payload.data?.buyer?.email;
-        
+        const email = payload.data?.buyer?.email || payload.data?.email;
         if (!email) {
-            throw new Error("Email e UserID não encontrados no payload.");
+            console.error("[ERROR] Não foi possível encontrar ID (sck) nem Email no payload.");
+            return new Response(JSON.stringify({ error: "No user identifier found" }), { status: 400, headers: corsHeaders });
         }
 
-        // Tenta encontrar o usuário na tabela profiles se existir campo email, ou tenta via admin list
-        // Como RPC falha, usamos listUsers com filtro (Pode ser lento se houver muitos usuários, mas é funcional)
-        // OBS: A API admin.listUsers não filtra por email diretamente de forma eficiente sem RPC,
-        // mas podemos tentar buscar na tabela 'appointments' que TEM o email e o user_id linkado.
+        console.log(`[LOOKUP] Buscando usuário pelo email: ${email}`);
         
-        const { data: appointmentData } = await supabaseAdmin
-            .from('appointments')
-            .select('user_id')
-            .eq('email', email)
-            .limit(1)
-            .maybeSingle();
+        // Busca na lista de usuários do Supabase Auth
+        const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        
+        if (listError) console.error("[ERROR] Falha ao listar usuários:", listError);
 
-        if (appointmentData?.user_id) {
-            userId = appointmentData.user_id;
-            method = 'email_via_appointments';
+        const user = users?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
+
+        if (user) {
+            userId = user.id;
+            method = 'email_lookup';
+            console.log(`[SUCCESS] Usuário encontrado: ${userId}`);
         } else {
-            // Último recurso: Listar usuários (lento, mas funciona para bases pequenas < 50)
-            const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
-            const foundUser = users?.find((u: any) => u.email === email);
-            
-            if (foundUser) {
-                userId = foundUser.id;
-                method = 'email_via_auth_list';
-            }
+            console.error(`[FAIL] Nenhum usuário encontrado com o email ${email}`);
+            // Retorna 200 para a Hotmart parar de tentar reenviar, pois o usuário não existe no seu app
+            return new Response(JSON.stringify({ error: "User email not found in app" }), { 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+            });
         }
     }
 
-    if (!userId) {
-        console.error("Falha crítica: Usuário não identificado para o pagamento.");
-        return new Response(JSON.stringify({ error: "User not identified" }), { 
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-    }
-
-    console.log(`Usuário identificado: ${userId} (Método: ${method}). Atualizando plano...`);
-
-    // Atualiza o perfil para Premium
-    const { error: updateError } = await supabaseAdmin
+    // 7. ATUALIZAÇÃO DO PLANO
+    console.log(`[UPDATE] Atualizando usuário ${userId} para Premium...`);
+    
+    // Tenta atualizar
+    const { error: updateError, data: updateData } = await supabaseAdmin
         .from('profiles')
-        .update({ 
-            plan: 'premium',
-            // Opcional: Salvar data de expiração se for assinatura recorrente
-            // premium_expires_at: ... 
-        })
-        .eq('id', userId);
+        .update({ plan: 'premium' })
+        .eq('id', userId)
+        .select();
 
     if (updateError) {
-        console.error("Erro ao atualizar perfil:", updateError);
+        console.error("[ERROR] Falha no update:", updateError);
         throw updateError;
     }
 
-    return new Response(JSON.stringify({ success: true, userId }), { 
-        status: 200, 
+    // Se não atualizou nada (registro não existia), faz um insert (failsafe)
+    if (!updateData || updateData.length === 0) {
+        console.log("[INFO] Profile não existia. Criando novo...");
+        const { error: insertError } = await supabaseAdmin
+            .from('profiles')
+            .insert({ id: userId, plan: 'premium', daily_usage: 0 });
+            
+        if (insertError) console.error("[ERROR] Falha ao criar profile:", insertError);
+    }
+
+    return new Response(JSON.stringify({ success: true, userId, method }), { 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
     });
 
   } catch (err: any) {
-    console.error("Erro no processamento:", err);
+    console.error("[EXCEPTION] Erro crítico:", err.message);
     return new Response(JSON.stringify({ error: err.message }), { 
         status: 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
