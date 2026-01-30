@@ -1802,7 +1802,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                                     try {
                                         new Notification(title || "Nova Mensagem", {
                                             body: body,
-                                            icon: '/icon.png', // CHANGED FROM SVG
+                                            icon: '/icon.png',
                                         });
                                     } catch (e) {
                                         alert(`${title}\n${body}`);
