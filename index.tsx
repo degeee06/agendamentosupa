@@ -391,8 +391,7 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
                 throw error || new Error("Não foi possível obter o ID do link gerado.");
             }
             
-            // Usando URL fixa conforme solicitado
-            const newLink = `https://oubook.com.br/book-link/${data.id}`;
+            const newLink = `${PRODUCTION_URL}/book-link/${data.id}`;
             setGeneratedLink(newLink);
         } catch (err: any) {
             console.error("Erro ao gerar link:", err);
