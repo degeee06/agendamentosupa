@@ -391,7 +391,6 @@ const LinkGeneratorModal = ({ isOpen, onClose, userId }: { isOpen: boolean; onCl
                 throw error || new Error("Não foi possível obter o ID do link gerado.");
             }
             
-            // Alterado para usar o domínio oubook.com.br
             const newLink = `https://oubook.com.br/book-link/${data.id}`;
             setGeneratedLink(newLink);
         } catch (err: any) {
@@ -1351,7 +1350,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     }
 
     if (linkStatus === 'loading') {
-        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+        return <div className="min-h-screen bg-white flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-black" /></div>;
     }
 
     if (linkStatus === 'invalid' || linkStatus === 'used') {
@@ -1803,7 +1802,7 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
                                     try {
                                         new Notification(title || "Nova Mensagem", {
                                             body: body,
-                                            icon: '/icon.png',
+                                            icon: '/icon.png', // CHANGED FROM SVG
                                         });
                                     } catch (e) {
                                         alert(`${title}\n${body}`);
@@ -2410,7 +2409,7 @@ const App = () => {
     }
 
     if (loading) {
-        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+        return <div className="min-h-screen bg-white flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-black" /></div>;
     }
 
     if (!session) {
