@@ -2021,7 +2021,8 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         } else {
           // Para web, evitamos classes que possam conflitar com o script automático da hotmart
           // e abrimos manualmente o link.
-          window.open("https://pay.hotmart.com/U102480243K?off=60hkkyyw&checkoutMode=6&bid=1769639078531", "_blank");
+          // ADICIONADO: Parametro sck para rastreamento do usuário
+          window.open(`https://pay.hotmart.com/U102480243K?off=60hkkyyw&checkoutMode=6&bid=1769639078531&sck=${user.id}`, "_blank");
         }
       } catch (e: any) {
         if (!e.userCancelled) {
