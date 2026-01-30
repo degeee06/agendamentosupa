@@ -1351,7 +1351,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
     }
 
     if (linkStatus === 'loading') {
-        return <div className="min-h-screen bg-white flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-black" /></div>;
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     if (linkStatus === 'invalid' || linkStatus === 'used') {
@@ -2410,7 +2410,7 @@ const App = () => {
     }
 
     if (loading) {
-        return <div className="min-h-screen bg-white flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-black" /></div>;
+        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
     }
 
     if (!session) {
