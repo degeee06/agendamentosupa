@@ -22,19 +22,23 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
 });
 
+// --- REQUISITO PWA: Handler de Fetch ---
+// Para que o navegador mostre o botão de instalar, o SW precisa interceptar requisições.
+self.addEventListener('fetch', (event) => {
+  // Apenas passa a requisição adiante (Network Only), mas satisfaz o critério de PWA.
+  // Você pode adicionar lógica de cache aqui no futuro se quiser funcionamento offline.
+  event.respondWith(fetch(event.request));
+});
+
 // Listener padrão do Firebase
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano ', payload);
   
-  // CORREÇÃO DE DUPLICIDADE:
-  // Se o payload já tem "notification", o navegador exibe automaticamente.
-  // Não devemos chamar showNotification novamente.
   if (payload.notification) {
       console.log("Notificação gerenciada pelo sistema (payload contém chave 'notification').");
       return; 
   }
 
-  // Apenas exibe manualmente se for uma mensagem somente de dados (Data-only)
   const notificationTitle = payload.data?.title;
   const notificationBody = payload.data?.body;
   const notificationIcon = '/icon.svg';
@@ -54,23 +58,19 @@ messaging.onBackgroundMessage((payload) => {
   }
 });
 
-// Listener para clique na notificação
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   
-  // Tenta recuperar dados da URL de destino (se houver) ou abre a raiz
   const targetUrl = event.notification.data?.landing_page || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      // Se houver uma janela aberta do app, foca nela
       for (let i = 0; i < clientList.length; i++) {
         let client = clientList[i];
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
           return client.focus();
         }
       }
-      // Se não, abre uma nova
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
