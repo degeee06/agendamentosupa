@@ -2375,6 +2375,7 @@ const App = () => {
     const [session, setSession] = useState<any>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isVerifyingUpgrade, setIsVerifyingUpgrade] = useState(false);
 
     useEffect(() => {
         (supabase.auth as any).getSession().then(({ data: { session } }: any) => {
@@ -2427,6 +2428,46 @@ const App = () => {
 
         return () => { supabase.removeChannel(channel); };
     }, [session?.user?.id]);
+    
+    // VERIFICAÇÃO DE UPGRADE PÓS-RETORNO
+    useEffect(() => {
+        // Verifica se a URL contém ?success=true (retorno do Stripe)
+        const query = new URLSearchParams(window.location.search);
+        
+        if (session?.user?.id && query.get('success') === 'true') {
+            setIsVerifyingUpgrade(true);
+            
+            let attempts = 0;
+            const maxAttempts = 15; // Tenta por 30 segundos (15 * 2s)
+
+            const intervalId = setInterval(async () => {
+                attempts++;
+                console.log(`Verificando upgrade (Tentativa ${attempts}/${maxAttempts})...`);
+                
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (data && data.plan === 'premium') {
+                    setProfile(data);
+                    clearInterval(intervalId);
+                    setIsVerifyingUpgrade(false);
+                    alert("🎉 Upgrade Confirmado! Bem-vindo ao Plano Premium.");
+                    // Limpa a URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(intervalId);
+                    setIsVerifyingUpgrade(false);
+                    // Não mostra erro, pois o Webhook pode apenas estar lento. O Realtime cuidará disso.
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, 2000);
+
+            return () => clearInterval(intervalId);
+        }
+    }, [session?.user?.id]);
 
     const fetchProfile = async (userId: string) => {
         try {
@@ -2462,6 +2503,17 @@ const App = () => {
 
     if (loading) {
         return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
+    }
+    
+    // Tela de carregamento específica para verificação de upgrade
+    if (isVerifyingUpgrade) {
+        return (
+             <div className="min-h-screen bg-black flex flex-col justify-center items-center text-center p-4">
+                <LoaderIcon className="w-16 h-16 text-yellow-400 mb-4" />
+                <h2 className="text-2xl font-bold text-white mb-2">Confirmando Pagamento...</h2>
+                <p className="text-gray-400">Por favor, aguarde enquanto validamos seu upgrade com a operadora.</p>
+            </div>
+        );
     }
 
     if (!session) {
