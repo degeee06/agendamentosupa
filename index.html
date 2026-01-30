@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
     <title>Oubook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -73,7 +72,7 @@
       }
     </style>
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icon.svg">
+    <link rel="apple-touch-icon" href="/icon.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script type="importmap">
@@ -108,19 +107,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-    <script>
-      // Registro do Service Worker para PWA Install (A2HS)
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/firebase-messaging-sw.js')
-            .then((registration) => {
-              console.log('SW PWA registrado com sucesso:', registration.scope);
-            })
-            .catch((err) => {
-              console.log('Falha ao registrar SW PWA:', err);
-            });
-        });
-      }
-    </script>
   </body>
 </html>

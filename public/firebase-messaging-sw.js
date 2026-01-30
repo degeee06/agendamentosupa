@@ -13,81 +13,28 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Nome do Cache para controle de versão
-const CACHE_NAME = 'oubook-pwa-v1';
-// Arquivos essenciais para o "Shell" do app funcionar offline
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/index.css',
-  '/manifest.json',
-  '/icon.svg'
-];
-
-// Instalação: Cache dos arquivos estáticos essenciais
+// Força o SW a ativar imediatamente
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      // Tenta cachear, mas não falha a instalação se um arquivo opcional falhar
-      return cache.addAll(ASSETS_TO_CACHE).catch(err => console.warn('Falha parcial no cache:', err));
-    })
-  );
 });
 
-// Ativação: Limpeza de caches antigos
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    Promise.all([
-      clients.claim(),
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME) {
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-    ])
-  );
+  event.waitUntil(clients.claim());
 });
 
-// Fetch: Estratégia Network First (Tenta rede, se falhar, usa cache)
-// Isso é CRUCIAL para o banner de instalação aparecer
-self.addEventListener('fetch', (event) => {
-  // Ignora requisições que não sejam GET ou que sejam para esquemas não suportados (ex: chrome-extension)
-  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
-    return;
-  }
-
-  // Para navegação (HTML), tenta rede -> cache -> fallback offline
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .catch(() => {
-          return caches.match('/index.html')
-            .then(response => response || caches.match('/'));
-        })
-    );
-    return;
-  }
-
-  // Para outros recursos, tenta rede -> cache
-  event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request))
-  );
-});
-
-// Listener padrão do Firebase para mensagens em background
+// Listener padrão do Firebase
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano ', payload);
   
+  // CORREÇÃO DE DUPLICIDADE:
+  // Se o payload já tem "notification", o navegador exibe automaticamente.
+  // Não devemos chamar showNotification novamente.
   if (payload.notification) {
+      console.log("Notificação gerenciada pelo sistema (payload contém chave 'notification').");
       return; 
   }
 
+  // Apenas exibe manualmente se for uma mensagem somente de dados (Data-only)
   const notificationTitle = payload.data?.title;
   const notificationBody = payload.data?.body;
   const notificationIcon = '/icon.svg';
@@ -107,18 +54,23 @@ messaging.onBackgroundMessage((payload) => {
   }
 });
 
+// Listener para clique na notificação
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  
+  // Tenta recuperar dados da URL de destino (se houver) ou abre a raiz
   const targetUrl = event.notification.data?.landing_page || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      // Se houver uma janela aberta do app, foca nela
       for (let i = 0; i < clientList.length; i++) {
         let client = clientList[i];
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
           return client.focus();
         }
       }
+      // Se não, abre uma nova
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
