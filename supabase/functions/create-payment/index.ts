@@ -67,6 +67,8 @@ serve(async (req) => {
     }
 
     // 1. Obter ou Criar Cliente no Asaas
+    // O Asaas exige um ID de cliente (cus_xxx) para criar cobrança.
+    
     let customerId = "";
     
     // Busca pelo email
@@ -76,12 +78,11 @@ serve(async (req) => {
     if (searchData.data && searchData.data.length > 0) {
         customerId = searchData.data[0].id;
         
-        // CORREÇÃO CRÍTICA: Se o cliente já existe, mas o formulário passou um CPF novo, 
-        // tentamos atualizar o cadastro no Asaas para garantir que a cobrança Pix não falhe por falta de CPF.
+        // Se forneceu CPF e o cliente já existe, tenta atualizar para garantir que o cadastro esteja completo
         if (payerCpf) {
-            try {
+             try {
                 await fetch(`${ASAAS_API_URL}/customers/${customerId}`, {
-                    method: "POST", // Asaas usa POST para update em alguns endpoints ou PUT, a doc V3 usa POST para update parcial as vezes, mas vamos testar
+                    method: "POST", 
                     headers: asaasHeaders,
                     body: JSON.stringify({ cpfCnpj: payerCpf, mobilePhone: phone, name: name })
                 });
@@ -89,7 +90,6 @@ serve(async (req) => {
                 console.warn("Falha ao atualizar cliente existente no Asaas (ignorado)", ignore);
             }
         }
-
     } else {
         // Cria novo cliente
         const newCustomerRes = await fetch(`${ASAAS_API_URL}/customers`, {
@@ -106,7 +106,6 @@ serve(async (req) => {
         
         if (!newCustomerRes.ok) {
             console.error("Erro ao criar cliente Asaas:", newCustomerData);
-            // Retorna erro amigável se for CPF inválido
             if (newCustomerData.errors && newCustomerData.errors[0]?.code === 'invalid_cpfCnpj') {
                  throw new Error("CPF inválido informado.");
             }
@@ -148,9 +147,10 @@ serve(async (req) => {
     const pixData = await pixRes.json();
 
     // 4. Salvar no Supabase
+    // Reutilizamos a coluna mp_payment_id para guardar o ID do Asaas
     const { error: dbError } = await supabase.from("payments").insert({
         appointment_id: appointmentId,
-        mp_payment_id: asaasId, // Reutilizando a coluna mp_payment_id para guardar o ID do Asaas
+        mp_payment_id: asaasId, 
         status: 'pending', 
         amount: Number(amount)
     });

@@ -5,7 +5,7 @@ declare const Deno: any;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ASAAS_WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN"); // Opcional: configure no Asaas e nas variáveis
+const ASAAS_WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN"); 
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,13 +18,65 @@ serve(async (req) => {
   }
 
   try {
-    // Validação de Token (Segurança do Webhook)
-    const requestToken = req.headers.get('asaas-access-token');
-    if (ASAAS_WEBHOOK_TOKEN && requestToken !== ASAAS_WEBHOOK_TOKEN) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    // Se for chamada manual do Frontend para polling (simula webhook)
+    const requestUrl = new URL(req.url);
+    // Tenta ler o body uma única vez
+    let body;
+    try {
+        body = await req.json();
+    } catch(e) {
+        body = {};
     }
 
-    const body = await req.json();
+    // Verifica se é uma chamada de polling (manual) ou webhook real
+    const isManualCheck = body.action === 'payment.updated' && body.id;
+
+    if (!isManualCheck) {
+        // Validação de Token (Segurança do Webhook Real do Asaas)
+        const requestToken = req.headers.get('asaas-access-token');
+        if (ASAAS_WEBHOOK_TOKEN && requestToken !== ASAAS_WEBHOOK_TOKEN) {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+        }
+    }
+
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Lógica para Polling Manual (Front pergunta: "E aí, pagou?")
+    if (isManualCheck) {
+        const paymentId = body.id; // ID do Asaas
+        const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+        
+        if (!ASAAS_API_KEY) throw new Error("API Key não configurada");
+
+        // Consulta direta ao Asaas
+        const asaasRes = await fetch(`https://www.asaas.com/api/v3/payments/${paymentId}`, {
+            headers: { "access_token": ASAAS_API_KEY }
+        });
+        const asaasData = await asaasRes.json();
+        
+        const isApproved = asaasData.status === 'RECEIVED' || asaasData.status === 'CONFIRMED';
+        
+        // Se aprovado, atualiza banco
+        if (isApproved) {
+             await supabaseAdmin
+            .from('payments')
+            .update({ status: 'approved', updated_at: new Date().toISOString() })
+            .eq('mp_payment_id', paymentId);
+
+            if (asaasData.externalReference) {
+                 await supabaseAdmin
+                .from('appointments')
+                .update({ status: 'Confirmado' })
+                .eq('id', asaasData.externalReference);
+            }
+        }
+
+        return new Response(JSON.stringify({ status: isApproved ? 'approved' : asaasData.status }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    }
+
+    // Lógica para Webhook Real (Asaas avisa: "Pagou!")
     const { event, payment } = body;
 
     console.log(`[Asaas Webhook] Evento: ${event}, Payment ID: ${payment?.id}`);
@@ -33,13 +85,9 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ignored: true }), { status: 200, headers: corsHeaders });
     }
 
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Eventos de sucesso do Asaas
     if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
         
         // 1. Atualizar status na tabela payments
-        // Usamos mp_payment_id pois é onde guardamos o ID do Asaas
         const { error: payError } = await supabaseAdmin
             .from('payments')
             .update({ status: 'approved', updated_at: new Date().toISOString() })
@@ -47,10 +95,7 @@ serve(async (req) => {
 
         if (payError) console.error("Erro ao atualizar pagamento:", payError);
 
-        // 2. Buscar o appointment_id associado (via externalReference ou busca no banco)
-        // Se salvamos externalReference na criação, podemos usar payment.externalReference
-        // Caso contrário, buscamos na tabela payments.
-        
+        // 2. Buscar e confirmar o agendamento
         let appointmentId = payment.externalReference;
 
         if (!appointmentId) {
@@ -63,7 +108,6 @@ serve(async (req) => {
         }
 
         if (appointmentId) {
-            // 3. Confirmar o agendamento
             const { error: apptError } = await supabaseAdmin
                 .from('appointments')
                 .update({ status: 'Confirmado' })
@@ -78,7 +122,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
-  } catch (err) {
+  } catch (err: any) {
     console.error(`Webhook Error: ${err.message}`)
     return new Response(JSON.stringify({ error: err.message }), { 
         status: 400,
