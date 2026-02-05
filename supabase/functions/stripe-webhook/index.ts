@@ -56,18 +56,28 @@ serve(async (req) => {
         
         const isApproved = asaasData.status === 'RECEIVED' || asaasData.status === 'CONFIRMED';
         
-        // Se aprovado, atualiza banco
+        // Se aprovado, processa a lógica de sucesso
         if (isApproved) {
+             // 1. Atualiza pagamentos de agendamento (se existir)
              await supabaseAdmin
             .from('payments')
             .update({ status: 'approved', updated_at: new Date().toISOString() })
             .eq('mp_payment_id', paymentId);
 
             if (asaasData.externalReference) {
-                 await supabaseAdmin
-                .from('appointments')
-                .update({ status: 'Confirmado' })
-                .eq('id', asaasData.externalReference);
+                 // Verifica se é Upgrade ou Agendamento
+                 if (asaasData.externalReference.startsWith('UPGRADE_')) {
+                     const userId = asaasData.externalReference.split('UPGRADE_')[1];
+                     await supabaseAdmin
+                        .from('profiles')
+                        .update({ plan: 'premium' })
+                        .eq('id', userId);
+                 } else {
+                     await supabaseAdmin
+                        .from('appointments')
+                        .update({ status: 'Confirmado' })
+                        .eq('id', asaasData.externalReference);
+                 }
             }
         }
 
@@ -87,34 +97,53 @@ serve(async (req) => {
 
     if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
         
-        // 1. Atualizar status na tabela payments
-        const { error: payError } = await supabaseAdmin
+        // 1. Atualizar status na tabela payments (apenas se existir registro lá)
+        await supabaseAdmin
             .from('payments')
             .update({ status: 'approved', updated_at: new Date().toISOString() })
             .eq('mp_payment_id', payment.id);
 
-        if (payError) console.error("Erro ao atualizar pagamento:", payError);
+        // 2. Processar a lógica de negócio baseada na externalReference
+        let ref = payment.externalReference;
 
-        // 2. Buscar e confirmar o agendamento
-        let appointmentId = payment.externalReference;
+        if (ref) {
+            if (ref.startsWith('UPGRADE_')) {
+                // É UM UPGRADE DE PLANO
+                const userId = ref.split('UPGRADE_')[1];
+                console.log(`Processando Upgrade Premium para usuário: ${userId}`);
+                
+                const { error: profileError } = await supabaseAdmin
+                    .from('profiles')
+                    .update({ plan: 'premium' })
+                    .eq('id', userId);
+                
+                if (profileError) console.error("Erro ao atualizar perfil:", profileError);
+                else console.log("Perfil atualizado para Premium com sucesso.");
 
-        if (!appointmentId) {
+            } else {
+                // É UM AGENDAMENTO (ref é o appointment_id)
+                console.log(`Confirmando agendamento: ${ref}`);
+                const { error: apptError } = await supabaseAdmin
+                    .from('appointments')
+                    .update({ status: 'Confirmado' })
+                    .eq('id', ref);
+                    
+                if (apptError) console.error("Erro ao confirmar agendamento:", apptError);
+            }
+        } else {
+            // Tentativa de fallback para pagamentos sem externalReference (busca na tabela payments)
             const { data: payData } = await supabaseAdmin
                 .from('payments')
                 .select('appointment_id')
                 .eq('mp_payment_id', payment.id)
                 .single();
-            appointmentId = payData?.appointment_id;
-        }
-
-        if (appointmentId) {
-            const { error: apptError } = await supabaseAdmin
+            
+            if (payData?.appointment_id) {
+                 await supabaseAdmin
                 .from('appointments')
                 .update({ status: 'Confirmado' })
-                .eq('id', appointmentId);
-                
-            if (apptError) console.error("Erro ao confirmar agendamento:", apptError);
-            else console.log(`Agendamento ${appointmentId} confirmado via Asaas.`);
+                .eq('id', payData.appointment_id);
+            }
         }
     }
 

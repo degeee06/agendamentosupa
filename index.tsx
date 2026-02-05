@@ -5,7 +5,6 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
@@ -115,11 +114,11 @@ const maskPhone = (value: string) => {
 
 const maskCpf = (value: string) => {
     return value
-        .replace(/\D/g, '') // substitui qualquer caracter que nao seja numero por nada
-        .replace(/(\d{3})(\d)/, '$1.$2') // captura 2 grupos de numero o primeiro de 3 e o segundo de 1, apos capturar o primeiro grupo ele adiciona um ponto antes do segundo grupo de numero
+        .replace(/\D/g, '') 
+        .replace(/(\d{3})(\d)/, '$1.$2') 
         .replace(/(\d{3})(\d)/, '$1.$2')
         .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-        .replace(/(-\d{2})\d+?$/, '$1') // captura 2 numeros seguidos de um traço e não deixa ser digitado mais nada
+        .replace(/(-\d{2})\d+?$/, '$1') 
 };
 
 // --- ÍCONES ---
@@ -250,6 +249,146 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
         </div>
     );
 };
+
+const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, onClose: () => void, limit: number, onUpgrade: () => void }) => {
+    const [step, setStep] = useState<'info' | 'cpf' | 'payment'>('info');
+    const [cpf, setCpf] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [paymentData, setPaymentData] = useState<any>(null);
+    const [copied, setCopied] = useState(false);
+
+    // Reset quando o modal abre/fecha
+    useEffect(() => {
+        if (!isOpen) {
+            setStep('info');
+            setCpf('');
+            setPaymentData(null);
+            setIsLoading(false);
+        }
+    }, [isOpen]);
+
+    const handleGeneratePix = async () => {
+        const unmasked = cpf.replace(/\D/g, '');
+        if (unmasked.length !== 11) {
+            alert("CPF inválido.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('create-subscription', {
+                body: { cpf: unmasked }
+            });
+            if (error || !data) throw error || new Error("Erro ao gerar assinatura.");
+            
+            setPaymentData(data);
+            setStep('payment');
+        } catch (e: any) {
+            console.error(e);
+            alert("Erro ao criar assinatura: " + e.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCopy = () => {
+        if (paymentData?.qr_code) {
+            navigator.clipboard.writeText(paymentData.qr_code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const handleManualCheck = async () => {
+        setIsLoading(true);
+        try {
+            const { data } = await supabase.functions.invoke('stripe-webhook', {
+                body: {
+                    id: paymentData.paymentId,
+                    action: 'payment.updated'
+                }
+            });
+            if (data?.status === 'approved') {
+                alert("Pagamento confirmado! Atualize a página.");
+                onClose();
+                window.location.reload();
+            } else {
+                alert("Ainda aguardando confirmação do banco.");
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Upgrade para Premium">
+            {step === 'info' && (
+                <div className="text-center">
+                    <StarIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">Desbloqueie o Poder Total</h3>
+                    <p className="text-gray-300 mb-6">
+                        Remova o limite de {limit} usos diários e tenha acesso ilimitado ao Oubook.
+                    </p>
+                    <div className="bg-gray-800 p-4 rounded-lg mb-6">
+                        <p className="text-gray-400 text-sm">Assinatura Mensal</p>
+                        <p className="text-3xl font-bold text-white">R$ 29,90<span className="text-sm font-normal text-gray-500">/mês</span></p>
+                    </div>
+                    <button 
+                        onClick={() => setStep('cpf')}
+                        className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-3 px-6 rounded-xl hover:scale-[1.02] transition-all"
+                    >
+                        CONTINUAR
+                    </button>
+                </div>
+            )}
+
+            {step === 'cpf' && (
+                <div className="space-y-4">
+                    <p className="text-gray-300 text-sm">Para gerar o Pix, precisamos do seu CPF (exigência do Banco Central).</p>
+                    <input 
+                        type="tel" 
+                        placeholder="CPF (apenas números)" 
+                        value={cpf} 
+                        onChange={e => setCpf(maskCpf(e.target.value))}
+                        className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-yellow-500 outline-none"
+                    />
+                    <button 
+                        onClick={handleGeneratePix}
+                        disabled={isLoading || cpf.length < 14}
+                        className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50 flex justify-center"
+                    >
+                        {isLoading ? <LoaderIcon className="w-6 h-6" /> : "Gerar Pix"}
+                    </button>
+                </div>
+            )}
+
+            {step === 'payment' && paymentData && (
+                <div className="text-center space-y-4">
+                    <p className="text-green-400 font-bold">Cobrança Gerada!</p>
+                    <div className="bg-white p-2 rounded-lg inline-block">
+                        <img src={`data:image/png;base64,${paymentData.qr_code_base64}`} alt="QR Code" className="w-48 h-48" />
+                    </div>
+                    <div className="flex items-center space-x-2 bg-black/30 p-2 rounded border border-gray-600">
+                        <input type="text" value={paymentData.qr_code} readOnly className="bg-transparent text-white w-full text-xs truncate" />
+                        <button onClick={handleCopy} className="text-yellow-400 text-xs font-bold whitespace-nowrap">
+                            {copied ? "COPIADO" : "COPIAR"}
+                        </button>
+                    </div>
+                    <button 
+                        onClick={handleManualCheck}
+                        className="w-full bg-blue-600/20 text-blue-400 font-bold py-2 rounded hover:bg-blue-600/40 flex items-center justify-center gap-2"
+                    >
+                        {isLoading ? <LoaderIcon className="w-4 h-4" /> : <RefreshIcon className="w-4 h-4" />}
+                        Já paguei
+                    </button>
+                </div>
+            )}
+        </Modal>
+    );
+};
+
+// ... Resto do código permanece igual, apenas substituindo a chamada antiga do Modal ...
 
 const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
     const [name, setName] = useState('');
@@ -682,28 +821,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                     </button>
                 </div>
             )}
-        </Modal>
-    );
-};
-
-const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, onClose: () => void, limit: number, onUpgrade: () => void }) => {
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Limite Diário Atingido">
-            <div className="text-center">
-                <AlertCircleIcon className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-                <p className="text-gray-300 mb-4">
-                    Você atingiu o limite de {limit} usos diários para o plano Trial.
-                </p>
-                <p className="text-sm text-gray-400 mb-6">
-                    Seu limite de uso será reiniciado automaticamente amanhã, à meia-noite (00:00). Para continuar agendando hoje, faça o upgrade para o plano Premium.
-                </p>
-                <button 
-                    onClick={onUpgrade}
-                    className="w-full bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-700 text-black font-black py-4 px-6 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-                >
-                    🚀 FAZER UPGRADE PREMIUM
-                </button>
-            </div>
         </Modal>
     );
 };
@@ -1950,38 +2067,9 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
         window.location.reload();
     };
 
-    const handleUpgrade = async () => {
-      try {
-        if (Capacitor.isNativePlatform()) {
-          const offerings = await Purchases.getOfferings();
-          if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-            // Isso abre a interface nativa da Google Play Store
-            const purchaseResult = await Purchases.purchasePackage({ aPackage: offerings.current.availablePackages[0] });
-            const customerInfo = purchaseResult.customerInfo;
-
-            // Verifica se a compra foi aprovada
-            if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
-              // Atualize o status no seu Supabase aqui
-              const { data: updatedProfile, error: profileError = null } = await supabase
-                .from('profiles')
-                .update({ plan: 'premium' })
-                .eq('id', user.id)
-                .select()
-                .single();
-              if (updatedProfile) setProfile(updatedProfile);
-              alert("Upgrade realizado com sucesso!");
-            }
-          } else {
-             alert("Não foi possível carregar as ofertas da loja. Verifique sua conexão ou se o app está configurado corretamente na Play Store.");
-          }
-        } else {
-            alert("Upgrade via Web indisponível no momento. Entre em contato com o suporte.");
-        }
-      } catch (e: any) {
-        if (!e.userCancelled) {
-          alert("Erro ao processar compra: " + (e.message || e));
-        }
-      }
+    const handleUpgrade = () => {
+      // Abre o modal personalizado com CPF -> Pix
+      setIsUpgradeModalOpen(true);
     };
     
     const handleSaveAppointment = async (name: string, phone: string, email: string, date: string, time: string) => {
