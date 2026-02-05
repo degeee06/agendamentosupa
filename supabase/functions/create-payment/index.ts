@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from 'https://esm.sh/stripe@14.21.0'
 
 declare const Deno: any;
 
@@ -9,110 +8,146 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const ASAAS_API_URL = Deno.env.get("ASAAS_API_URL") || "https://www.asaas.com/api/v3";
+const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
-
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16',
-  httpClient: Stripe.createFetchHttpClient(),
-});
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    if (!ASAAS_API_KEY) {
+        throw new Error("ASAAS_API_KEY não configurada no Supabase.");
+    }
+
     const body = await req.json();
     const { action } = body;
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // --- ACTION: RETRIEVE (Recuperar dados do QR Code para pagamentos existentes) ---
+    // --- HELPER: HEADERS ASAAS ---
+    const asaasHeaders = {
+        "Content-Type": "application/json",
+        "access_token": ASAAS_API_KEY
+    };
+
+    // --- ACTION: RETRIEVE (Recuperar QR Code de pagamento existente) ---
     if (action === 'retrieve') {
-        const { paymentId } = body; // Usamos o mp_payment_id do banco, que agora será o PaymentIntent ID
+        const { paymentId } = body; // ID do Asaas (pay_xxxxxxxx)
         
-        if (!paymentId) {
-             return new Response(JSON.stringify({ error: "ID necessário para recuperação." }), { 
-                status: 400, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" } 
-            });
+        if (!paymentId) throw new Error("ID de pagamento necessário.");
+
+        // Busca dados do QR Code no Asaas
+        const qrRes = await fetch(`${ASAAS_API_URL}/payments/${paymentId}/pixQrCode`, { headers: asaasHeaders });
+        const qrData = await qrRes.json();
+
+        // Busca status atual do pagamento
+        const payRes = await fetch(`${ASAAS_API_URL}/payments/${paymentId}`, { headers: asaasHeaders });
+        const payData = await payRes.json();
+
+        if (!qrRes.ok || !payRes.ok) {
+            console.error("Erro Asaas Retrieve:", qrData, payData);
+            throw new Error("Erro ao recuperar dados do Asaas.");
         }
 
-        // Busca o PaymentIntent no Stripe
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
-
-        const nextAction = paymentIntent.next_action;
-        const pixData = nextAction?.pix_display_qr_code;
-
-        const responsePayload = {
-            id: paymentIntent.id,
-            status: paymentIntent.status === 'succeeded' ? 'approved' : 'pending',
-            qr_code: pixData?.data, // Código copia e cola
-            qr_code_url: pixData?.image_url_png, // URL da imagem
-            ticket_url: pixData?.hosted_regulatory_receipt_url // Opcional
-        };
-
-        return new Response(JSON.stringify(responsePayload), { 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
+        return new Response(JSON.stringify({
+            id: paymentId,
+            status: payData.status === 'RECEIVED' || payData.status === 'CONFIRMED' ? 'approved' : 'pending',
+            qr_code: qrData.payload, // Copia e Cola
+            qr_code_base64: qrData.encodedImage, // Imagem Base64
+            ticket_url: payData.invoiceUrl // Link da fatura
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // --- ACTION: CREATE (Padrão - Criar novo pagamento Pix via Stripe) ---
-    const { amount, description, professionalId, appointmentId, payerEmail } = body;
+    // --- ACTION: CREATE (Criar novo Pix) ---
+    const { amount, description, professionalId, appointmentId, payerEmail, name, phone, payerCpf } = body;
 
     if (!amount || !appointmentId) {
-      return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes." }), { 
-        status: 400, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
+      throw new Error("Campos obrigatórios ausentes.");
     }
 
-    // Nota: Como solicitado, estamos substituindo o Mercado Pago pelo Stripe no painel admin.
-    // Assumimos que o Stripe configurado (ENVs) é a conta plataforma que recebe os pagamentos.
-    // Se fosse um marketplace complexo, usaríamos Stripe Connect headers aqui.
+    // 1. Obter ou Criar Cliente no Asaas
+    // O Asaas exige um ID de cliente (cus_xxx) para criar cobrança.
+    // Vamos buscar pelo email primeiro.
+    
+    let customerId = "";
+    
+    const searchCustomerRes = await fetch(`${ASAAS_API_URL}/customers?email=${encodeURIComponent(payerEmail || '')}`, { headers: asaasHeaders });
+    const searchData = await searchCustomerRes.json();
 
-    // Cria PaymentIntent via API do Stripe (PIX)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(Number(amount) * 100), // Stripe usa centavos e inteiros
-      currency: 'brl',
-      payment_method_types: ['pix'],
-      description: description || "Serviço Agendado",
-      metadata: {
-          appointmentId: appointmentId,
-          professionalId: professionalId // Útil para webhooks
-      },
-      receipt_email: payerEmail || undefined,
+    if (searchData.data && searchData.data.length > 0) {
+        customerId = searchData.data[0].id;
+    } else {
+        // Cria novo cliente
+        const newCustomerRes = await fetch(`${ASAAS_API_URL}/customers`, {
+            method: "POST",
+            headers: asaasHeaders,
+            body: JSON.stringify({
+                name: name || "Cliente Oubook",
+                email: payerEmail || "cliente@oubook.com",
+                cpfCnpj: payerCpf || undefined, // Opcional se não tiver
+                mobilePhone: phone || undefined
+            })
+        });
+        const newCustomerData = await newCustomerRes.json();
+        
+        if (!newCustomerRes.ok) {
+            console.error("Erro ao criar cliente Asaas:", newCustomerData);
+            throw new Error(`Erro Asaas Customer: ${JSON.stringify(newCustomerData.errors)}`);
+        }
+        customerId = newCustomerData.id;
+    }
+
+    // 2. Criar Cobrança (Payment)
+    const paymentPayload = {
+        customer: customerId,
+        billingType: "PIX",
+        value: Number(amount),
+        dueDate: new Date().toISOString().split('T')[0], // Vence hoje
+        description: description || `Agendamento #${appointmentId}`,
+        externalReference: appointmentId // Útil para conciliação
+    };
+
+    const paymentRes = await fetch(`${ASAAS_API_URL}/payments`, {
+        method: "POST",
+        headers: asaasHeaders,
+        body: JSON.stringify(paymentPayload)
     });
+    
+    const paymentData = await paymentRes.json();
 
-    // Salva o registro na tabela 'payments'
-    // Mapeamos mp_payment_id para o ID do PaymentIntent do Stripe para manter compatibilidade de schema
+    if (!paymentRes.ok) {
+        console.error("Erro ao criar pagamento Asaas:", paymentData);
+        throw new Error(`Erro Asaas Payment: ${JSON.stringify(paymentData.errors)}`);
+    }
+
+    const asaasId = paymentData.id;
+
+    // 3. Obter QR Code Pix
+    const pixRes = await fetch(`${ASAAS_API_URL}/payments/${asaasId}/pixQrCode`, { headers: asaasHeaders });
+    const pixData = await pixRes.json();
+
+    // 4. Salvar no Supabase
     const { error: dbError } = await supabase.from("payments").insert({
         appointment_id: appointmentId,
-        mp_payment_id: paymentIntent.id, 
-        status: 'pending', // Stripe começa como requires_payment_method ou requires_action, tratamos como pending
+        mp_payment_id: asaasId, // Reutilizando a coluna mp_payment_id para guardar o ID do Asaas
+        status: 'pending', 
         amount: Number(amount)
     });
 
-    if (dbError) {
-        console.error("Erro ao salvar pagamento no DB:", dbError);
-    }
+    if (dbError) console.error("Erro DB:", dbError);
 
-    const nextAction = paymentIntent.next_action;
-    const pixData = nextAction?.pix_display_qr_code;
-
-    const responsePayload = {
-        id: paymentIntent.id,
+    // 5. Retorno
+    return new Response(JSON.stringify({
+        id: asaasId,
         status: 'pending',
-        qr_code: pixData?.data, // Código copia e cola
-        qr_code_url: pixData?.image_url_png, // URL da imagem hospedada pelo Stripe
-        ticket_url: pixData?.hosted_regulatory_receipt_url
-    };
-
-    return new Response(JSON.stringify(responsePayload), { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-    });
+        qr_code: pixData.payload, // Copia e Cola
+        qr_code_base64: pixData.encodedImage, // Imagem Base64
+        ticket_url: paymentData.invoiceUrl
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e: any) {
+    console.error("Edge Function Error:", e);
     return new Response(JSON.stringify({ error: e.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -10,7 +10,6 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 // FIREBASE WEB SDK
-// Changed to compat import to resolve 'initializeApp' missing export issue
 import firebase from 'firebase/compat/app';
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
@@ -21,7 +20,6 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
 
-// Configurações do Firebase (Hardcoded conforme fornecido)
 const firebaseConfig = {
     apiKey: "AIzaSyAZZdxquZYwS7M7-FL3R_gwqA30Q-bCvwc",
     authDomain: "agendamento-link-e6f81.firebaseapp.com",
@@ -31,8 +29,6 @@ const firebaseConfig = {
     appId: "1:881996925647:web:96e83812836269b62485ba"
 };
 
-// Chave VAPID para Web Push (Necessária para getToken no navegador)
-// Prioriza variável de ambiente, fallback para a chave fornecida
 const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BKe7Lzlv5imlTgwnC9zqVHlcVqRdFW2o-DZtfGLN_90V01ILQdZ8obPTRU5CPwABsNxwQYg6-UsntYd2BB7Debg";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
@@ -41,8 +37,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !PRODUCTION_URL) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Inicialização Firebase (Apenas se estiver no navegador)
-// Isso evita erros ao rodar no ambiente nativo onde 'window' pode ter comportamentos diferentes na inicialização
 let messaging: any = null;
 if (typeof window !== 'undefined') {
     try {
@@ -96,11 +90,11 @@ type AssistantMessage = {
 };
 
 type PaymentData = {
-    id: string; // Changed to string to support Stripe IDs
+    id: string;
     status: string;
-    qr_code: string;
-    qr_code_base64?: string; // Optional now
-    qr_code_url?: string; // Added for Stripe image URL
+    qr_code: string; // Copia e Cola
+    qr_code_base64?: string; // Imagem
+    qr_code_url?: string; 
     ticket_url?: string;
 };
 
@@ -151,7 +145,6 @@ const BellIcon = (p: any) => <Icon {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3
 
 
 // --- COMPONENTES DE UI ---
-// (Mantenha os componentes UI inalterados, AppointmentCard, Modal, etc...)
 const StatusBadge = ({ status }: { status: Appointment['status'] }) => {
   const baseClasses = "px-3 py-1 text-xs font-medium rounded-full text-white";
   const statusClasses = {
@@ -249,7 +242,6 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: { isOpen: bool
     );
 };
 
-// ... (Rest of modal components: NewAppointmentModal, PaymentModal, LinkGeneratorModal, BusinessProfileModal, UpgradeModal, TermsModal, AssistantModal - Keep existing implementations) ...
 const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolean, onClose: () => void, onSave: (name: string, phone: string, email: string, date: string, time: string) => Promise<void>, user: User }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -305,22 +297,22 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualChe
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={() => {}} title="Pagamento Pix (Stripe)" size="md">
+        <Modal isOpen={isOpen} onClose={() => {}} title="Pagamento Pix (Asaas)" size="md">
             <div className="flex flex-col items-center space-y-6">
                 <p className="text-gray-300 text-center">
                     Escaneie o QR Code abaixo ou use a opção "Copia e Cola" no aplicativo do seu banco para finalizar o agendamento.
                 </p>
                 
                 <div className="bg-white p-4 rounded-xl">
-                    {paymentData.qr_code_url ? (
+                    {paymentData.qr_code_base64 ? (
                         <img 
-                            src={paymentData.qr_code_url} 
+                            src={`data:image/png;base64,${paymentData.qr_code_base64}`} 
                             alt="QR Code Pix" 
                             className="w-48 h-48 object-contain" 
                         />
-                    ) : paymentData.qr_code_base64 ? (
+                    ) : paymentData.qr_code_url ? (
                         <img 
-                            src={`data:image/png;base64,${paymentData.qr_code_base64}`} 
+                            src={paymentData.qr_code_url} 
                             alt="QR Code Pix" 
                             className="w-48 h-48 object-contain" 
                         />
@@ -463,7 +455,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     const [newBlockedDate, setNewBlockedDate] = useState('');
     const [newBlockedTime, setNewBlockedTime] = useState('');
     const [selectedDay, setSelectedDay] = useState('monday');
-    // mpConnection removed/ignored as we use Stripe now
 
     const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
     const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
@@ -474,7 +465,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         if (isOpen) {
             const fetchProfile = async () => {
                 setIsLoading(true);
-                // We fetch profile only, MP connection is not relevant anymore for Stripe specific implementation requested
                 const { data: profileData, error: profileError } = await supabase.from('business_profiles').select('*').eq('user_id', userId).single();
 
                 if (profileData) {
@@ -568,15 +558,15 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70dvh] overflow-y-auto pr-2 scrollbar-hide">
                     
-                    {/* Stripe Connection Status */}
+                    {/* Asaas Info */}
                      <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                        <h3 className="text-lg font-semibold text-white mb-2">Pagamentos (Stripe)</h3>
-                        <p className="text-sm text-gray-400 mb-4">Pagamentos via Pix são processados automaticamente pelo Stripe.</p>
+                        <h3 className="text-lg font-semibold text-white mb-2">Pagamentos (Asaas)</h3>
+                        <p className="text-sm text-gray-400 mb-4">Pagamentos via Pix são processados automaticamente pelo Asaas.</p>
                         
                         <div className="bg-green-400/10 p-3 rounded-lg border border-green-400/20">
                             <div className="flex items-center space-x-2 text-green-400">
                                 <CheckCircleIcon className="w-5 h-5" />
-                                <span className="font-bold">Stripe Conectado (Pix Ativo)</span>
+                                <span className="font-bold">Integração Ativa</span>
                             </div>
                         </div>
                     </div>
@@ -593,7 +583,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
                                 value={profile.service_price === 0 ? '' : (profile.service_price ?? '')} 
                                 onChange={e => {
                                     const val = e.target.value;
-                                    // Mantemos como string no estado local para permitir a digitação de decimais (0., 0.0, etc)
                                     setProfile(p => ({ ...p, service_price: val as any }));
                                 }}
                                 className="w-full bg-black/20 border border-gray-600 rounded-lg p-3 pl-10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
@@ -1030,7 +1019,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
             const checkStatus = async () => {
                 try {
                     // Chama o webhook manualmente apenas para verificar (silent check)
-                    const { data, error = null } = await supabase.functions.invoke('mp-webhook', {
+                    const { data, error = null } = await supabase.functions.invoke('stripe-webhook', {
                         body: {
                             id: paymentData.id.toString(),
                             action: 'payment.updated'
@@ -1142,7 +1131,9 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                     description: `Agendamento ${name}`,
                     professionalId: adminId,
                     appointmentId: appointmentId,
-                    payerEmail: email || 'cliente@oubook.com'
+                    payerEmail: email || 'cliente@oubook.com',
+                    name: name, // Novo campo para Asaas
+                    phone: phone // Novo campo para Asaas
                 }
             });
             
@@ -2302,155 +2293,57 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
 };
 
 const App = () => {
-    const [session, setSession] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isVerifyingUpgrade, setIsVerifyingUpgrade] = useState(false);
+    const [tokenId, setTokenId] = useState<string | null>(null);
 
     useEffect(() => {
-        (supabase.auth as any).getSession().then(({ data: { session } }: any) => {
-            setSession(session);
-            if (session) {
-                fetchProfile(session.user.id);
-            } else {
-                setLoading(false);
-            }
-        });
+        // Handle Routing for Public Booking Link
+        const path = window.location.pathname;
+        const match = path.match(/\/book-link\/([a-zA-Z0-9-]+)/);
+        
+        if (match && match[1]) {
+            setTokenId(match[1]);
+            setLoading(false);
+            return;
+        }
 
-        const {
-            data: { subscription },
-        } = (supabase.auth as any).onAuthStateChange((_event: any, session: any) => {
-            setSession(session);
-            if (session) {
-                // Optimize: only fetch if needed
-                if (!profile || profile.id !== session.user.id) {
-                    fetchProfile(session.user.id);
-                }
+        // Handle Authentication
+        const initAuth = async () => {
+             const { data: { session } } = await supabase.auth.getSession();
+             if (session?.user) {
+                 setUser({ id: session.user.id, email: session.user.email });
+                 const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+                 if (data) setProfile(data);
+             }
+             setLoading(false);
+        };
+        initAuth();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (session?.user) {
+                setUser({ id: session.user.id, email: session.user.email });
+                 const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+                 if (data) setProfile(data);
             } else {
+                setUser(null);
                 setProfile(null);
-                setLoading(false);
             }
+            setLoading(false);
         });
 
         return () => subscription.unsubscribe();
+
     }, []);
 
-    // Adiciona listener Realtime para atualizar o Perfil (Plano) instantaneamente
-    useEffect(() => {
-        if (!session?.user?.id) return;
+    if (loading) return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
 
-        const channel = supabase
-            .channel(`profile-updates-${session.user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'profiles',
-                    filter: `id=eq.${session.user.id}`
-                },
-                (payload) => {
-                    console.log("Perfil atualizado em tempo real:", payload.new);
-                    setProfile(payload.new as Profile);
-                }
-            )
-            .subscribe();
+    if (tokenId) return <PaginaDeAgendamento tokenId={tokenId} />;
 
-        return () => { supabase.removeChannel(channel); };
-    }, [session?.user?.id]);
-    
-    // VERIFICAÇÃO DE UPGRADE PÓS-RETORNO
-    useEffect(() => {
-        // Verifica se a URL contém ?success=true (retorno do Stripe)
-        const query = new URLSearchParams(window.location.search);
-        
-        if (session?.user?.id && query.get('success') === 'true') {
-            setIsVerifyingUpgrade(true);
-            
-            let attempts = 0;
-            const maxAttempts = 15; // Tenta por 30 segundos (15 * 2s)
+    if (!user) return <LoginPage />;
 
-            const intervalId = setInterval(async () => {
-                attempts++;
-                console.log(`Verificando upgrade (Tentativa ${attempts}/${maxAttempts})...`);
-                
-                const { data, error } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (data && data.plan === 'premium') {
-                    setProfile(data);
-                    clearInterval(intervalId);
-                    setIsVerifyingUpgrade(false);
-                    alert("🎉 Upgrade Confirmado! Bem-vindo ao Plano Premium.");
-                    // Limpa a URL
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(intervalId);
-                    setIsVerifyingUpgrade(false);
-                    // Não mostra erro, pois o Webhook pode apenas estar lento. O Realtime cuidará disso.
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            }, 2000);
-
-            return () => clearInterval(intervalId);
-        }
-    }, [session?.user?.id]);
-
-    const fetchProfile = async (userId: string) => {
-        try {
-            const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-            if (data) {
-                setProfile(data);
-            } else {
-                const { data: newProfile } = await supabase
-                    .from('profiles')
-                    .insert({ 
-                        id: userId, 
-                        plan: 'trial', 
-                        daily_usage: 0, 
-                        last_usage_date: new Date().toISOString().split('T')[0] 
-                    })
-                    .select()
-                    .single();
-                if (newProfile) setProfile(newProfile);
-            }
-        } catch (e) {
-            console.error("Profile fetch error", e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const path = window.location.pathname;
-    const bookLinkMatch = path.match(/\/book-link\/([^\/]+)/);
-
-    if (bookLinkMatch) {
-        return <PaginaDeAgendamento tokenId={bookLinkMatch[1]} />;
-    }
-
-    if (loading) {
-        return <div className="min-h-screen bg-black flex justify-center items-center"><LoaderIcon className="w-12 h-12 text-white" /></div>;
-    }
-    
-    // Tela de carregamento específica para verificação de upgrade
-    if (isVerifyingUpgrade) {
-        return (
-             <div className="min-h-screen bg-black flex flex-col justify-center items-center text-center p-4">
-                <LoaderIcon className="w-16 h-16 text-yellow-400 mb-4" />
-                <h2 className="text-2xl font-bold text-white mb-2">Confirmando Pagamento...</h2>
-                <p className="text-gray-400">Por favor, aguarde enquanto validamos seu upgrade com a operadora.</p>
-            </div>
-        );
-    }
-
-    if (!session) {
-        return <LoginPage />;
-    }
-
-    return <Dashboard user={session.user} profile={profile} setProfile={setProfile} />;
+    return <Dashboard user={user} profile={profile} setProfile={setProfile} />;
 };
 
 const container = document.getElementById('root');
