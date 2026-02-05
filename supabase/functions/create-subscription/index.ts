@@ -14,7 +14,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 // VALOR DA ASSINATURA MENSAL
-const SUBSCRIPTION_VALUE = 5.00; 
+const SUBSCRIPTION_VALUE = 0.01; 
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
