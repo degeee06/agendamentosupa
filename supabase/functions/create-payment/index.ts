@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from 'https://esm.sh/stripe@14.21.0'
 
 declare const Deno: any;
 
@@ -10,9 +11,12 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
 
-// Constrói a URL do Webhook baseada na URL do projeto Supabase
-const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/mp-webhook`;
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: '2023-10-16',
+  httpClient: Stripe.createFetchHttpClient(),
+});
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -25,49 +29,27 @@ serve(async (req) => {
 
     // --- ACTION: RETRIEVE (Recuperar dados do QR Code para pagamentos existentes) ---
     if (action === 'retrieve') {
-        const { paymentId, professionalId } = body;
+        const { paymentId } = body; // Usamos o mp_payment_id do banco, que agora será o PaymentIntent ID
         
-        if (!paymentId || !professionalId) {
-             return new Response(JSON.stringify({ error: "IDs necessários para recuperação." }), { 
+        if (!paymentId) {
+             return new Response(JSON.stringify({ error: "ID necessário para recuperação." }), { 
                 status: 400, 
                 headers: { ...corsHeaders, "Content-Type": "application/json" } 
             });
         }
 
-        // 1. Busca token do profissional
-        const { data: mp, error: mpError } = await supabase
-            .from("mp_connections")
-            .select("access_token")
-            .eq("user_id", professionalId)
-            .single();
+        // Busca o PaymentIntent no Stripe
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
 
-        if (mpError || !mp) {
-             return new Response(JSON.stringify({ error: "Profissional desconectado." }), { 
-                status: 400, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" } 
-            });
-        }
+        const nextAction = paymentIntent.next_action;
+        const pixData = nextAction?.pix_display_qr_code;
 
-        // 2. Busca dados no Mercado Pago
-        const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-            headers: {
-                "Authorization": `Bearer ${mp.access_token}`
-            }
-        });
-
-        if (!mpRes.ok) {
-            throw new Error("Erro ao buscar pagamento no Mercado Pago.");
-        }
-
-        const paymentData = await mpRes.json();
-
-        // 3. Monta payload de resposta igual ao de criação
         const responsePayload = {
-            id: paymentData.id,
-            status: paymentData.status,
-            qr_code: paymentData.point_of_interaction?.transaction_data?.qr_code,
-            qr_code_base64: paymentData.point_of_interaction?.transaction_data?.qr_code_base64,
-            ticket_url: paymentData.point_of_interaction?.transaction_data?.ticket_url
+            id: paymentIntent.id,
+            status: paymentIntent.status === 'succeeded' ? 'approved' : 'pending',
+            qr_code: pixData?.data, // Código copia e cola
+            qr_code_url: pixData?.image_url_png, // URL da imagem
+            ticket_url: pixData?.hosted_regulatory_receipt_url // Opcional
         };
 
         return new Response(JSON.stringify(responsePayload), { 
@@ -75,62 +57,39 @@ serve(async (req) => {
         });
     }
 
-    // --- ACTION: CREATE (Padrão - Criar novo pagamento) ---
+    // --- ACTION: CREATE (Padrão - Criar novo pagamento Pix via Stripe) ---
     const { amount, description, professionalId, appointmentId, payerEmail } = body;
 
-    if (!amount || !professionalId || !appointmentId) {
+    if (!amount || !appointmentId) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios ausentes." }), { 
         status: 400, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       });
     }
 
-    // 1. Busca o token do profissional
-    const { data: mp, error: mpError } = await supabase
-      .from("mp_connections")
-      .select("access_token")
-      .eq("user_id", professionalId)
-      .single();
+    // Nota: Como solicitado, estamos substituindo o Mercado Pago pelo Stripe no painel admin.
+    // Assumimos que o Stripe configurado (ENVs) é a conta plataforma que recebe os pagamentos.
+    // Se fosse um marketplace complexo, usaríamos Stripe Connect headers aqui.
 
-    if (mpError || !mp) {
-      return new Response(JSON.stringify({ error: "Profissional não conectou o Mercado Pago." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // 2. Cria pagamento via API do Mercado Pago (PIX)
-    const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${mp.access_token}`,
-        "X-Idempotency-Key": appointmentId 
+    // Cria PaymentIntent via API do Stripe (PIX)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(Number(amount) * 100), // Stripe usa centavos e inteiros
+      currency: 'brl',
+      payment_method_types: ['pix'],
+      description: description || "Serviço Agendado",
+      metadata: {
+          appointmentId: appointmentId,
+          professionalId: professionalId // Útil para webhooks
       },
-      body: JSON.stringify({
-        transaction_amount: Number(amount),
-        description: description || "Serviço Agendado",
-        payment_method_id: "pix",
-        notification_url: WEBHOOK_URL,
-        payer: { 
-            email: payerEmail || "cliente@email.com" 
-        },
-        external_reference: appointmentId 
-      }),
+      receipt_email: payerEmail || undefined,
     });
 
-    const paymentData = await mpRes.json();
-
-    if (!mpRes.ok) {
-        console.error("Erro MP Create:", paymentData);
-        throw new Error(paymentData.message || "Erro ao criar pagamento no Mercado Pago");
-    }
-
-    // 3. Salva o registro na tabela 'payments'
+    // Salva o registro na tabela 'payments'
+    // Mapeamos mp_payment_id para o ID do PaymentIntent do Stripe para manter compatibilidade de schema
     const { error: dbError } = await supabase.from("payments").insert({
         appointment_id: appointmentId,
-        mp_payment_id: paymentData.id.toString(),
-        status: paymentData.status,
+        mp_payment_id: paymentIntent.id, 
+        status: 'pending', // Stripe começa como requires_payment_method ou requires_action, tratamos como pending
         amount: Number(amount)
     });
 
@@ -138,12 +97,15 @@ serve(async (req) => {
         console.error("Erro ao salvar pagamento no DB:", dbError);
     }
 
+    const nextAction = paymentIntent.next_action;
+    const pixData = nextAction?.pix_display_qr_code;
+
     const responsePayload = {
-        id: paymentData.id,
-        status: paymentData.status,
-        qr_code: paymentData.point_of_interaction?.transaction_data?.qr_code,
-        qr_code_base64: paymentData.point_of_interaction?.transaction_data?.qr_code_base64,
-        ticket_url: paymentData.point_of_interaction?.transaction_data?.ticket_url
+        id: paymentIntent.id,
+        status: 'pending',
+        qr_code: pixData?.data, // Código copia e cola
+        qr_code_url: pixData?.image_url_png, // URL da imagem hospedada pelo Stripe
+        ticket_url: pixData?.hosted_regulatory_receipt_url
     };
 
     return new Response(JSON.stringify(responsePayload), { 

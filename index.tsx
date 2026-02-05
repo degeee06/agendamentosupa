@@ -96,11 +96,12 @@ type AssistantMessage = {
 };
 
 type PaymentData = {
-    id: number;
+    id: string; // Changed to string to support Stripe IDs
     status: string;
     qr_code: string;
-    qr_code_base64: string;
-    ticket_url: string;
+    qr_code_base64?: string; // Optional now
+    qr_code_url?: string; // Added for Stripe image URL
+    ticket_url?: string;
 };
 
 // --- HELPERS ---
@@ -287,7 +288,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSave, user }: { isOpen: boolea
     );
 };
 
-const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualCheck }: { isOpen: boolean, onClose: () => void, paymentData: PaymentData, appointmentId: string, onManualCheck: (id: number) => Promise<void> }) => {
+const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualCheck }: { isOpen: boolean, onClose: () => void, paymentData: PaymentData, appointmentId: string, onManualCheck: (id: string) => Promise<void> }) => {
     const [copied, setCopied] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
 
@@ -304,14 +305,20 @@ const PaymentModal = ({ isOpen, onClose, paymentData, appointmentId, onManualChe
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={() => {}} title="Pagamento Pix" size="md">
+        <Modal isOpen={isOpen} onClose={() => {}} title="Pagamento Pix (Stripe)" size="md">
             <div className="flex flex-col items-center space-y-6">
                 <p className="text-gray-300 text-center">
                     Escaneie o QR Code abaixo ou use a opção "Copia e Cola" no aplicativo do seu banco para finalizar o agendamento.
                 </p>
                 
                 <div className="bg-white p-4 rounded-xl">
-                    {paymentData.qr_code_base64 ? (
+                    {paymentData.qr_code_url ? (
+                        <img 
+                            src={paymentData.qr_code_url} 
+                            alt="QR Code Pix" 
+                            className="w-48 h-48 object-contain" 
+                        />
+                    ) : paymentData.qr_code_base64 ? (
                         <img 
                             src={`data:image/png;base64,${paymentData.qr_code_base64}`} 
                             alt="QR Code Pix" 
@@ -456,7 +463,7 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
     const [newBlockedDate, setNewBlockedDate] = useState('');
     const [newBlockedTime, setNewBlockedTime] = useState('');
     const [selectedDay, setSelectedDay] = useState('monday');
-    const [mpConnection, setMpConnection] = useState<any>(null);
+    // mpConnection removed/ignored as we use Stripe now
 
     const daysOfWeek = { monday: "Segunda", tuesday: "Terça", wednesday: "Quarta", thursday: "Quinta", friday: "Sexta", saturday: "Sábado", sunday: "Domingo" };
     const defaultWorkingDays = { monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: false, sunday: false };
@@ -467,25 +474,22 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
         if (isOpen) {
             const fetchProfile = async () => {
                 setIsLoading(true);
-                const [profileRes, mpRes] = await Promise.all([
-                    supabase.from('business_profiles').select('*').eq('user_id', userId).single(),
-                    supabase.from('mp_connections').select('*').eq('user_id', userId).single()
-                ]);
+                // We fetch profile only, MP connection is not relevant anymore for Stripe specific implementation requested
+                const { data: profileData, error: profileError } = await supabase.from('business_profiles').select('*').eq('user_id', userId).single();
 
-                if (profileRes.data) {
+                if (profileData) {
                     setProfile({
-                        ...profileRes.data,
-                        blocked_dates: profileRes.data.blocked_dates || [],
-                        blocked_times: profileRes.data.blocked_times || {},
-                        working_days: profileRes.data.working_days || defaultWorkingDays,
-                        start_time: profileRes.data.start_time || defaultStartTime,
-                        end_time: profileRes.data.end_time || defaultEndTime,
-                        service_price: profileRes.data.service_price !== undefined ? profileRes.data.service_price : 0
+                        ...profileData,
+                        blocked_dates: profileData.blocked_dates || [],
+                        blocked_times: profileData.blocked_times || {},
+                        working_days: profileData.working_days || defaultWorkingDays,
+                        start_time: profileData.start_time || defaultStartTime,
+                        end_time: profileData.end_time || defaultEndTime,
+                        service_price: profileData.service_price !== undefined ? profileData.service_price : 0
                     });
                 } else {
                     setProfile({ user_id: userId, blocked_dates: [], blocked_times: {}, working_days: defaultWorkingDays, start_time: defaultStartTime, end_time: defaultEndTime, service_price: 0 });
                 }
-                setMpConnection(mpRes.data);
                 setIsLoading(false);
             };
             fetchProfile();
@@ -506,41 +510,6 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             onClose();
         }
         setIsSaving(false);
-    };
-
-    const handleConnectMP = () => {
-        const clientId = import.meta.env.VITE_MP_CLIENT_ID;
-        const redirectUri = import.meta.env.VITE_MP_REDIRECT_URL;
-
-        // Codificar a URL corretamente (permitindo que o fluxo continue mesmo se não detectado no cliente local)
-        const encodedRedirect = encodeURIComponent(redirectUri || '');
-        
-        // Gera um estado aleatório (pode ser o ID do usuário) para segurança
-        const state = userId;
-        
-        const mpAuthUrl = `https://auth.mercadopago.com.br/authorization?client_id=${clientId || ''}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodedRedirect}`;
-        
-        console.log("Redirecionando para:", mpAuthUrl);
-        window.location.href = mpAuthUrl;
-    };
-
-    const handleDisconnect = async () => {
-        const confirmDisconnect = window.confirm("Deseja realmente desconectar sua conta do Mercado Pago? Você não poderá receber pagamentos Pix até conectar novamente.");
-        if (!confirmDisconnect) return;
-
-        setIsLoading(true);
-        const { error = null } = await supabase
-            .from('mp_connections')
-            .delete()
-            .eq('user_id', userId);
-
-        if (error) {
-            console.error("Erro ao desconectar:", error);
-            alert("Erro ao desconectar. Verifique se você rodou o comando SQL para permitir exclusão (DELETE policy) no Supabase.");
-        } else {
-            setMpConnection(null);
-        }
-        setIsLoading(false);
     };
 
     const handleWorkingDayChange = (day: string) => {
@@ -599,33 +568,17 @@ const BusinessProfileModal = ({ isOpen, onClose, userId }: { isOpen: boolean, on
             {isLoading ? <LoaderIcon className="w-8 h-8 mx-auto" /> : (
                 <div className="space-y-6 max-h-[70dvh] overflow-y-auto pr-2 scrollbar-hide">
                     
-                    {/* Mercado Pago Connection */}
+                    {/* Stripe Connection Status */}
                      <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                        <h3 className="text-lg font-semibold text-white mb-2">Pagamentos (Mercado Pago)</h3>
-                        <p className="text-sm text-gray-400 mb-4">Conecte sua conta do Mercado Pago para receber pagamentos via Pix automaticamente.</p>
-                        {mpConnection ? (
-                            <div className="bg-green-400/10 p-3 rounded-lg border border-green-400/20">
-                                <div className="flex items-center space-x-2 text-green-400 mb-3">
-                                    <CheckCircleIcon className="w-5 h-5" />
-                                    <span className="font-bold">Conta Conectada</span>
-                                </div>
-                                <button
-                                    onClick={handleDisconnect}
-                                    className="w-full bg-red-500/20 hover:bg-red-500/40 text-red-300 text-sm font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <LogOutIcon className="w-4 h-4" />
-                                    Desconectar / Trocar Conta
-                                </button>
+                        <h3 className="text-lg font-semibold text-white mb-2">Pagamentos (Stripe)</h3>
+                        <p className="text-sm text-gray-400 mb-4">Pagamentos via Pix são processados automaticamente pelo Stripe.</p>
+                        
+                        <div className="bg-green-400/10 p-3 rounded-lg border border-green-400/20">
+                            <div className="flex items-center space-x-2 text-green-400">
+                                <CheckCircleIcon className="w-5 h-5" />
+                                <span className="font-bold">Stripe Conectado (Pix Ativo)</span>
                             </div>
-                        ) : (
-                            <button 
-                                onClick={handleConnectMP}
-                                className="w-full bg-[#009EE3] hover:bg-[#0082BA] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                            >
-                                <LinkIcon className="w-5 h-5" />
-                                Conectar Mercado Pago
-                            </button>
-                        )}
+                        </div>
                     </div>
 
                     {/* Service Price */}
@@ -977,7 +930,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                         console.warn("Falha ao recuperar QR Code completo:", qrData?.error);
                                         // Fallback: usa dados parciais do banco (sem imagem QR)
                                         setPaymentData({
-                                            id: parseInt((existingPayment as any).mp_payment_id),
+                                            id: (existingPayment as any).mp_payment_id,
                                             status: (existingPayment as any).status,
                                             qr_code: '', 
                                             qr_code_base64: '',
@@ -987,7 +940,7 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
                                 } catch (e) {
                                     console.error("Erro na chamada da Edge Function para recuperar QR Code:", e);
                                      setPaymentData({
-                                        id: parseInt((existingPayment as any).mp_payment_id),
+                                        id: (existingPayment as any).mp_payment_id,
                                         status: (existingPayment as any).status,
                                         qr_code: '',
                                         qr_code_base64: '',
@@ -1102,10 +1055,10 @@ const PaginaDeAgendamento = ({ tokenId }: { tokenId: string }) => {
         };
     }, [paymentData, pendingAppointmentId, bookingCompleted]);
 
-    const handleManualVerification = async (paymentId: number) => {
+    const handleManualVerification = async (paymentId: string) => {
         try {
             // Tenta chamar o webhook manualmente para forçar a verificação
-            const { data, error = null } = await supabase.functions.invoke('mp-webhook', {
+            const { data, error = null } = await supabase.functions.invoke('stripe-webhook', {
                 body: {
                     id: paymentId.toString(),
                     action: 'payment.updated'
@@ -1598,29 +1551,6 @@ const Dashboard = ({ user, profile, setProfile }: { user: User, profile: Profile
     const TRIAL_LIMIT = 5;
     const usage = profile?.daily_usage ?? 0;
     const hasReachedLimit = profile?.plan === 'trial' && usage >= TRIAL_LIMIT;
-
-    useEffect(() => {
-        // Inject Hotmart script dynamically to ensure it runs after React mounts
-        const scriptId = 'hotmart-script';
-        const linkId = 'hotmart-css';
-    
-        if (!document.getElementById(scriptId)) {
-            const script = document.createElement('script'); 
-            script.id = scriptId;
-            script.src = 'https://static.hotmart.com/checkout/widget.min.js'; 
-            script.async = true;
-            document.head.appendChild(script); 
-        }
-    
-        if (!document.getElementById(linkId)) {
-            const link = document.createElement('link');
-            link.id = linkId;
-            link.rel = 'stylesheet'; 
-            link.type = 'text/css'; 
-            link.href = 'https://static.hotmart.com/css/hotmart-fb.min.css'; 
-            document.head.appendChild(link);
-        }
-    }, []);
 
     const fetchDashboardData = useCallback(async () => {
         // Não definir isLoading aqui para evitar piscar na tela com o realtime
