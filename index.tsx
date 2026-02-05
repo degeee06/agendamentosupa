@@ -342,7 +342,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
                     </p>
                     <div className="bg-gray-800 p-4 rounded-lg mb-6">
                         <p className="text-gray-400 text-sm">Assinatura Mensal</p>
-                        <p className="text-3xl font-bold text-white">R$ 0,01<span className="text-sm font-normal text-gray-500">/mês</span></p>
+                        <p className="text-3xl font-bold text-white">R$ 5,00<span className="text-sm font-normal text-gray-500">/mês</span></p>
                     </div>
                     <button 
                         onClick={() => setStep('cpf')}

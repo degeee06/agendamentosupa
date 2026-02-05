@@ -14,7 +14,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 // VALOR DA ASSINATURA MENSAL
-const SUBSCRIPTION_VALUE = 0.01; 
+const SUBSCRIPTION_VALUE = 5.00; 
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -22,7 +22,7 @@ serve(async (req) => {
   try {
     if (!ASAAS_API_KEY) throw new Error("ASAAS_API_KEY não configurada.");
 
-    // 1. Autenticação do Usuário via Supabase Auth
+    // 1. Autenticação
     const authHeader = req.headers.get('Authorization')!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -37,16 +37,13 @@ serve(async (req) => {
         "access_token": ASAAS_API_KEY
     };
 
-    // 2. Obter ou Criar Cliente no Asaas
+    // 2. Cliente Asaas
     let customerId = "";
-    
-    // Busca pelo email do usuário logado
     const searchCustomerRes = await fetch(`${ASAAS_API_URL}/customers?email=${encodeURIComponent(user.email || '')}`, { headers: asaasHeaders });
     const searchData = await searchCustomerRes.json();
 
     if (searchData.data && searchData.data.length > 0) {
         customerId = searchData.data[0].id;
-        // Atualiza CPF se necessário
         try {
             await fetch(`${ASAAS_API_URL}/customers/${customerId}`, {
                 method: "POST", 
@@ -55,7 +52,6 @@ serve(async (req) => {
             });
         } catch (e) { console.warn("Update customer ignored"); }
     } else {
-        // Cria novo cliente
         const newCustomerRes = await fetch(`${ASAAS_API_URL}/customers`, {
             method: "POST",
             headers: asaasHeaders,
@@ -71,24 +67,41 @@ serve(async (req) => {
         customerId = newCustomerData.id;
     }
 
-    // 3. Criar Assinatura (Subscription)
-    // Verifica se já existe assinatura ativa para não duplicar (opcional, mas bom)
+    // 3. ASSINATURA - LÓGICA DE LIMPEZA (Modo Faxina)
+    // Busca TODAS as assinaturas ativas do cliente
     const checkSubRes = await fetch(`${ASAAS_API_URL}/subscriptions?customer=${customerId}&status=ACTIVE`, { headers: asaasHeaders });
     const checkSubData = await checkSubRes.json();
     
     let subscriptionId = "";
+    const activeSubs = checkSubData.data || [];
 
-    if (checkSubData.data && checkSubData.data.length > 0) {
-        subscriptionId = checkSubData.data[0].id;
-    } else {
+    // Itera sobre todas as assinaturas encontradas
+    for (const sub of activeSubs) {
+        // Verifica se o valor é diferente de SUBSCRIPTION_VALUE (5.00)
+        if (Math.abs(sub.value - SUBSCRIPTION_VALUE) > 0.001) {
+            console.log(`Cancelando assinatura incorreta (ID: ${sub.id}, Valor: ${sub.value})...`);
+            await fetch(`${ASAAS_API_URL}/subscriptions/${sub.id}`, {
+                method: "DELETE",
+                headers: asaasHeaders
+            });
+        } else {
+            // Se achou uma correta, usa ela.
+            if (!subscriptionId) {
+                subscriptionId = sub.id;
+            }
+        }
+    }
+
+    // Se após a faxina não tivermos um ID válido, cria uma nova
+    if (!subscriptionId) {
         const subPayload = {
             customer: customerId,
             billingType: "PIX",
             value: SUBSCRIPTION_VALUE,
-            nextDueDate: new Date().toISOString().split('T')[0], // Cobra hoje
+            nextDueDate: new Date().toISOString().split('T')[0],
             cycle: "MONTHLY",
             description: "Assinatura Oubook Premium",
-            externalReference: `UPGRADE_${user.id}` // Link mágico para o webhook identificar
+            externalReference: `UPGRADE_${user.id}`
         };
 
         const subRes = await fetch(`${ASAAS_API_URL}/subscriptions`, {
@@ -101,18 +114,30 @@ serve(async (req) => {
         subscriptionId = subData.id;
     }
 
-    // 4. Obter a cobrança (payment) gerada pela assinatura para pegar o QR Code
-    // Assinaturas geram cobranças. Precisamos da cobrança 'PENDING' atual.
+    // 4. Cobrança (Payment)
     const paymentsRes = await fetch(`${ASAAS_API_URL}/subscriptions/${subscriptionId}/payments`, { headers: asaasHeaders });
     const paymentsData = await paymentsRes.json();
     
-    const pendingPayment = paymentsData.data?.find((p: any) => p.status === 'PENDING');
+    let pendingPayment = paymentsData.data?.find((p: any) => p.status === 'PENDING');
 
     if (!pendingPayment) {
-        throw new Error("Nenhuma cobrança pendente encontrada para esta assinatura.");
+        throw new Error("Aguarde um momento e tente novamente (Cobrança processando).");
     }
 
-    // 5. Pegar o QR Code dessa cobrança
+    // 5. Última verificação de segurança no valor do pagamento
+    if (Math.abs(pendingPayment.value - SUBSCRIPTION_VALUE) > 0.001) {
+        console.log(`Pagamento com valor errado (${pendingPayment.value}). Corrigindo para ${SUBSCRIPTION_VALUE}...`);
+        const updatePayRes = await fetch(`${ASAAS_API_URL}/payments/${pendingPayment.id}`, {
+            method: "POST",
+            headers: asaasHeaders,
+            body: JSON.stringify({ value: SUBSCRIPTION_VALUE })
+        });
+        if (updatePayRes.ok) {
+            pendingPayment = await updatePayRes.json();
+        }
+    }
+
+    // 6. QR Code
     const pixRes = await fetch(`${ASAAS_API_URL}/payments/${pendingPayment.id}/pixQrCode`, { headers: asaasHeaders });
     const pixData = await pixRes.json();
 
