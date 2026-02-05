@@ -14,7 +14,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 // VALOR DA ASSINATURA MENSAL
-const SUBSCRIPTION_VALUE = 0.01; 
+// Lê a variável de ambiente PREMIUM_PRICE ou usa 5.00 como padrão se não existir
+const envPrice = Deno.env.get("PREMIUM_PRICE");
+const SUBSCRIPTION_VALUE = envPrice ? parseFloat(envPrice) : 5.00; 
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -77,7 +79,7 @@ serve(async (req) => {
 
     // Itera sobre todas as assinaturas encontradas
     for (const sub of activeSubs) {
-        // Verifica se o valor é diferente de SUBSCRIPTION_VALUE (5.00)
+        // Verifica se o valor é diferente de SUBSCRIPTION_VALUE
         if (Math.abs(sub.value - SUBSCRIPTION_VALUE) > 0.001) {
             console.log(`Cancelando assinatura incorreta (ID: ${sub.id}, Valor: ${sub.value})...`);
             await fetch(`${ASAAS_API_URL}/subscriptions/${sub.id}`, {

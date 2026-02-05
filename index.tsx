@@ -18,6 +18,7 @@ declare let jspdf: any;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PRODUCTION_URL = import.meta.env.VITE_PRODUCTION_URL;
+const PREMIUM_PRICE = import.meta.env.VITE_PREMIUM_PRICE || "5.00"; // Configuração de preço via ENV
 
 const firebaseConfig = {
     apiKey: "AIzaSyAZZdxquZYwS7M7-FL3R_gwqA30Q-bCvwc",
@@ -342,7 +343,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
                     </p>
                     <div className="bg-gray-800 p-4 rounded-lg mb-6">
                         <p className="text-gray-400 text-sm">Assinatura Mensal</p>
-                        <p className="text-3xl font-bold text-white">R$ 5,00<span className="text-sm font-normal text-gray-500">/mês</span></p>
+                        <p className="text-3xl font-bold text-white">R$ {PREMIUM_PRICE.replace('.', ',')}<span className="text-sm font-normal text-gray-500">/mês</span></p>
                     </div>
                     <button 
                         onClick={() => setStep('cpf')}

@@ -14,6 +14,7 @@ declare global {
     readonly VITE_MP_CLIENT_ID: string;
     readonly VITE_MP_REDIRECT_URL: string;
     readonly VITE_REVENUECAT_ANDROID_KEY: string;
+    readonly VITE_PREMIUM_PRICE: string;
   }
   interface ImportMeta {
     readonly env: ImportMetaEnv;
