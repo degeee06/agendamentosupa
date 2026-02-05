@@ -67,16 +67,29 @@ serve(async (req) => {
     }
 
     // 1. Obter ou Criar Cliente no Asaas
-    // O Asaas exige um ID de cliente (cus_xxx) para criar cobrança.
-    // Vamos buscar pelo email primeiro.
-    
     let customerId = "";
     
+    // Busca pelo email
     const searchCustomerRes = await fetch(`${ASAAS_API_URL}/customers?email=${encodeURIComponent(payerEmail || '')}`, { headers: asaasHeaders });
     const searchData = await searchCustomerRes.json();
 
     if (searchData.data && searchData.data.length > 0) {
         customerId = searchData.data[0].id;
+        
+        // CORREÇÃO CRÍTICA: Se o cliente já existe, mas o formulário passou um CPF novo, 
+        // tentamos atualizar o cadastro no Asaas para garantir que a cobrança Pix não falhe por falta de CPF.
+        if (payerCpf) {
+            try {
+                await fetch(`${ASAAS_API_URL}/customers/${customerId}`, {
+                    method: "POST", // Asaas usa POST para update em alguns endpoints ou PUT, a doc V3 usa POST para update parcial as vezes, mas vamos testar
+                    headers: asaasHeaders,
+                    body: JSON.stringify({ cpfCnpj: payerCpf, mobilePhone: phone, name: name })
+                });
+            } catch (ignore) {
+                console.warn("Falha ao atualizar cliente existente no Asaas (ignorado)", ignore);
+            }
+        }
+
     } else {
         // Cria novo cliente
         const newCustomerRes = await fetch(`${ASAAS_API_URL}/customers`, {
@@ -85,7 +98,7 @@ serve(async (req) => {
             body: JSON.stringify({
                 name: name || "Cliente Oubook",
                 email: payerEmail || "cliente@oubook.com",
-                cpfCnpj: payerCpf || undefined, // Opcional se não tiver
+                cpfCnpj: payerCpf || undefined, 
                 mobilePhone: phone || undefined
             })
         });
@@ -93,6 +106,10 @@ serve(async (req) => {
         
         if (!newCustomerRes.ok) {
             console.error("Erro ao criar cliente Asaas:", newCustomerData);
+            // Retorna erro amigável se for CPF inválido
+            if (newCustomerData.errors && newCustomerData.errors[0]?.code === 'invalid_cpfCnpj') {
+                 throw new Error("CPF inválido informado.");
+            }
             throw new Error(`Erro Asaas Customer: ${JSON.stringify(newCustomerData.errors)}`);
         }
         customerId = newCustomerData.id;
@@ -118,6 +135,9 @@ serve(async (req) => {
 
     if (!paymentRes.ok) {
         console.error("Erro ao criar pagamento Asaas:", paymentData);
+        if (paymentData.errors && paymentData.errors[0]?.code === 'invalid_customer.cpfCnpj') {
+             throw new Error("O cliente no Asaas não possui CPF cadastrado. Tente novamente informando o CPF.");
+        }
         throw new Error(`Erro Asaas Payment: ${JSON.stringify(paymentData.errors)}`);
     }
 
