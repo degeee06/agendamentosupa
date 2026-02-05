@@ -95,6 +95,8 @@ type PaymentData = {
     qr_code_base64?: string; // Imagem
     qr_code_url?: string; 
     ticket_url?: string;
+    paymentId?: string; // ID do pagamento para verificar status
+    subscriptionId?: string;
 };
 
 // --- HELPERS ---
@@ -114,11 +116,11 @@ const maskPhone = (value: string) => {
 
 const maskCpf = (value: string) => {
     return value
-        .replace(/\D/g, '') 
-        .replace(/(\d{3})(\d)/, '$1.$2') 
+        .replace(/\D/g, '') // substitui qualquer caracter que nao seja numero por nada
+        .replace(/(\d{3})(\d)/, '$1.$2') // captura 2 grupos de numero o primeiro de 3 e o segundo de 1, apos capturar o primeiro grupo ele adiciona um ponto antes do segundo grupo de numero
         .replace(/(\d{3})(\d)/, '$1.$2')
         .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-        .replace(/(-\d{2})\d+?$/, '$1') 
+        .replace(/(-\d{2})\d+?$/, '$1') // captura 2 numeros seguidos de um traço e não deixa ser digitado mais nada
 };
 
 // --- ÍCONES ---
@@ -254,7 +256,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
     const [step, setStep] = useState<'info' | 'cpf' | 'payment'>('info');
     const [cpf, setCpf] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [paymentData, setPaymentData] = useState<any>(null);
+    const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
     const [copied, setCopied] = useState(false);
 
     // Reset quando o modal abre/fecha
@@ -278,8 +280,15 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
             const { data, error } = await supabase.functions.invoke('create-subscription', {
                 body: { cpf: unmasked }
             });
-            if (error || !data) throw error || new Error("Erro ao gerar assinatura.");
             
+            if (error || !data) {
+                throw new Error(error?.message || "Erro ao comunicar com o servidor.");
+            }
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Sucesso! Define os dados do pagamento e avança o passo
             setPaymentData(data);
             setStep('payment');
         } catch (e: any) {
@@ -299,6 +308,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
     };
 
     const handleManualCheck = async () => {
+        if (!paymentData?.paymentId) return;
         setIsLoading(true);
         try {
             const { data } = await supabase.functions.invoke('stripe-webhook', {
@@ -367,7 +377,7 @@ const UpgradeModal = ({ isOpen, onClose, limit, onUpgrade }: { isOpen: boolean, 
                 <div className="text-center space-y-4">
                     <p className="text-green-400 font-bold">Cobrança Gerada!</p>
                     <div className="bg-white p-2 rounded-lg inline-block">
-                        <img src={`data:image/png;base64,${paymentData.qr_code_base64}`} alt="QR Code" className="w-48 h-48" />
+                        <img src={`data:image/png;base64,${paymentData.qr_code_base64}`} alt="QR Code" className="w-48 h-48 object-contain" />
                     </div>
                     <div className="flex items-center space-x-2 bg-black/30 p-2 rounded border border-gray-600">
                         <input type="text" value={paymentData.qr_code} readOnly className="bg-transparent text-white w-full text-xs truncate" />
@@ -2403,30 +2413,43 @@ const App = () => {
             return;
         }
 
-        // Handle Authentication
-        const initAuth = async () => {
-             // CORREÇÃO: Casting para any para evitar erros de tipagem com a versão v2 do supabase-js
-             const { data: { session } } = await (supabase.auth as any).getSession();
-             if (session?.user) {
-                 setUser({ id: session.user.id, email: session.user.email });
-                 const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-                 if (data) setProfile(data);
-             }
-             setLoading(false);
-        };
-        initAuth();
-
-        // CORREÇÃO: Casting para any
-        const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(async (_event: string, session: any) => {
-            if (session?.user) {
-                setUser({ id: session.user.id, email: session.user.email });
-                 const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-                 if (data) setProfile(data);
-            } else {
+        // Lógica de Autenticação Unificada
+        const handleSession = async (session: any) => {
+            if (!session?.user) {
                 setUser(null);
                 setProfile(null);
+                setLoading(false);
+                return;
             }
-            setLoading(false);
+
+            try {
+                // Atualiza User imediatamente
+                setUser({ id: session.user.id, email: session.user.email });
+                
+                // Busca Profile
+                const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+                
+                if (error) {
+                    console.error("Profile fetch error:", error);
+                    // Se erro for 401 ou similar, pode indicar token inválido, mas não deslogamos automaticamente aqui para evitar loops
+                }
+                
+                if (data) setProfile(data);
+            } catch (error) {
+                console.error("Auth setup error:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        // 1. Verifica sessão inicial
+        (supabase.auth as any).getSession().then(({ data: { session } }: any) => {
+            handleSession(session);
+        });
+
+        // 2. Escuta mudanças
+        const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((_event: string, session: any) => {
+            handleSession(session);
         });
 
         return () => subscription.unsubscribe();
